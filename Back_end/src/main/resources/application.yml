@@ -1,0 +1,49 @@
+storage:
+  quota:
+    user-bytes: ${STORAGE_USER_QUOTA_BYTES:100000000000}
+    admin-bytes: ${STORAGE_ADMIN_QUOTA_BYTES:1000000000000}
+    max-file-bytes: 104857600
+
+spring:
+  application:
+    name: clouddocs-backend
+  profiles:
+    active: local
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:company_documents}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+server:
+  port: ${PORT:8080}
+
+aws:
+  region: ${AWS_REGION:ap-southeast-1}
+  s3:
+    bucket: ${S3_BUCKET:clouddocs-dev-private}
+    presign-expiry-seconds: ${S3_PRESIGN_EXPIRY:900}
+
+auth:
+  cognito:
+    issuer: ${COGNITO_ISSUER_URI}
+    client-id: ${COGNITO_CLIENT_ID}
+    user-info-uri: ${COGNITO_USER_INFO_URI:https://us-east-1izadkavha.auth.us-east-1.amazoncognito.com/oauth2/userInfo}
+    new-user-status: ${COGNITO_NEW_USER_STATUS:ACTIVE}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

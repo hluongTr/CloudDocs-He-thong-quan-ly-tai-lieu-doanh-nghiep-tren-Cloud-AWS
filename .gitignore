@@ -1,0 +1,38 @@
+
+# Java / Maven
+target/
+*.class
+*.log
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.settings/
+.project
+.classpath
+
+# Local files and uploaded documents
+Back_end/storage/
+/storage/
+uploads/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+.aws/
+**/credentials
+**/application-secrets.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated verification artifacts and publish checkouts
+artifacts/
+.publish-*/
+FrontEnd/tests/*.generated.html
+pom.verify.xml

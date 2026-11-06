@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CloudDocs — Quản lý tài liệu doanh nghiệp</title>
+    <link rel="icon" type="image/png" href="assets/clouddocs-logo.png?v=20261106-work-task-selection" />
+    <link rel="apple-touch-icon" href="assets/clouddocs-logo.png?v=20261106-work-tasks" />
+    <link rel="stylesheet" href="css/style.css?v=20261106-work-tasks" />
+    <link rel="stylesheet" href="css/motion.css?v=20261106-work-tasks" />
+  </head>
+  <body>
+    <div id="authScreen" class="auth-screen">
+      <main class="auth-card">
+        <div class="auth-brand">
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261106-work-tasks" width="50" height="50" alt="Logo CloudDocs" decoding="async" />
+          <div><strong>CloudDocs</strong><span>ENTERPRISE CLOUD</span></div>
+        </div>
+        <h1>Hệ thống quản lý<span>tài liệu doanh nghiệp</span></h1>
+        <p class="auth-muted">Lưu trữ tập trung. Chia sẻ thuận tiện.</p>
+        <div class="auth-divider" aria-hidden="true"></div>
+        <button id="cognitoLogin" class="primary-btn auth-submit" type="button">Đăng nhập</button>
+        <p id="loginError" class="auth-error hidden" role="alert" aria-live="polite"></p>
+      </main>
+    </div>
+
+    <div class="app-shell hidden" id="appShell">
+      <aside class="sidebar">
+        <a class="brand" href="#" data-page="dashboard" aria-label="CloudDocs - Tổng quan">
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261106-work-tasks" width="38" height="38" alt="Logo CloudDocs" decoding="async" />
+          <div>
+            <strong>CloudDocs</strong>
+            <span>Enterprise Cloud</span>
+          </div>
+        </a>
+
+        <div class="sidebar-scroll">
+        <nav class="nav">
+          <p class="nav-label">TỔNG QUAN</p>
+          <a class="nav-item active" href="#" data-page="dashboard"><span>▦</span> Tổng quan</a>
+          <a class="nav-item" href="#" data-page="documents"><span>▤</span> Tài liệu</a>
+          <a class="nav-item" href="#" data-page="tasks"><span>☑</span> Công việc</a>
+          <a class="nav-item" href="#" data-page="trash"><span>♲</span> Thùng rác</a>
+          <a class="nav-item" href="#" data-page="shared"><span>⇄</span> Được chia sẻ</a>
+          <a class="nav-item" href="#" data-page="recent"><span>◷</span> Gần đây</a>
+          <a class="nav-item" href="#" data-page="favorites"><span>☆</span> Yêu thích</a>
+
+          <p class="nav-label">QUẢN TRỊ</p>
+          <a class="nav-item" href="#" data-page="users"><span>♙</span> Người dùng</a>
+          <a class="nav-item" href="#" data-page="activity"><span>◉</span> Nhật ký hoạt động</a>
+          <a class="nav-item" href="#" data-page="settings"><span>⚙</span> Cài đặt</a>
+          <a class="nav-item" href="#" data-page="profile" id="profileNav"
+            ><span>◉</span> Hồ sơ cá nhân</a
+          >
+        </nav>
+
+        </div>
+        <div class="storage-card">
+          <div class="storage-top"><span>Dung lượng</span></div>
+          <div class="progress" aria-hidden="true"><i id="storageProgress" style="width:0%"></i></div>
+          <small id="storageUsage" data-no-translate>-</small>
+          <button class="upgrade-btn" id="manageStorage">Quản lý dung lượng</button>
+        </div>
+        <div class="user-mini">
+          <a class="avatar" href="#" data-page="profile" aria-label="Hồ sơ cá nhân">AD</a>
+          <a class="user-info" href="#" data-page="profile" aria-label="Hồ sơ cá nhân">
+            <strong id="sidebarUserName">—</strong>
+            <span id="sidebarUserRole">—</span>
+          </a>
+          <button title="Đăng xuất" id="logoutButton" aria-label="Đăng xuất"><span aria-hidden="true">↪</span> Đăng xuất</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu">☰</button>
+          <div class="breadcrumb">
+            <span>CloudDocs</span><b>/</b><strong id="pageTitle">Tổng quan</strong>
+          </div>
+          <div class="top-actions">
+            <label class="global-search">
+              <span>⌕</span>
+              <input id="globalSearch" placeholder="Tìm kiếm tài liệu, người dùng..." />
+              <kbd>Ctrl K</kbd>
+            </label>
+            <div class="notification-wrap">
+              <button
+                class="icon-btn"
+                id="notificationButton"
+                title="Thông báo"
+                aria-label="Mở thông báo"
+              >
+                🔔<i id="notificationDot" class="hidden"></i>
+              </button>
+              <div class="notification-popover hidden" id="notificationPopover">
+                <div class="notification-head">
+                  <div>
+                    <strong>Thông báo</strong><small>Thông báo chung và cập nhật công việc</small>
+                  </div>
+                  <button class="link-btn hidden" id="openNotificationComposer">
+                    ＋ Gửi thông báo
+                  </button>
+                </div>
+                <div class="notification-list" id="notificationList">
+                  <div class="notification-empty">Chưa có thông báo.</div>
+                </div>
+              </div>
+            </div>
+            <button class="avatar top-avatar" id="topAvatar">AD</button>
+          </div>
+        </header>
+
+        <section class="content">
+          <div id="dashboardPage" class="page">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">THỨ SÁU, 11 THÁNG 9, 2026</p>
+                <h1>Chào buổi tối, Admin 👋</h1>
+                <p class="muted">
+                  Đây là tình hình tài liệu và hoạt động của doanh nghiệp hôm nay.
+                </p>
+              </div>
+              <button class="primary-btn" id="openUpload"><span>＋</span> Tải tài liệu lên</button>
+            </div>
+
+            <form id="displayNameForm" class="display-name-prompt hidden">
+              <div class="display-name-copy">
+                <label for="displayNameInput">Bạn muốn được gọi là gì?</label>
+                <p>Thêm tên của bạn để hiển thị trong ứng dụng.</p>
+              </div>
+              <div class="display-name-fields">
+                <input id="displayNameInput" aria-label="Tên hiển thị" autocomplete="name" maxlength="120" required placeholder="Nhập họ và tên của bạn" />
+                <button id="saveDisplayName" class="primary-btn" type="submit">Lưu tên</button>
+              </div>
+              <p id="displayNameMessage" role="status" aria-live="polite"></p>
+            </form>
+            <div class="stat-grid">
+              <article class="stat-card">
+                <div class="stat-icon blue">▤</div>
+                <div>
+                  <span>Tổng tài liệu</span><strong id="statTotalDocuments">—</strong
+                  ><small><em>Tài liệu bạn có quyền truy cập</em></small>
+                </div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon purple">⇧</div>
+                <div>
+                  <span>Đã tải lên tháng này</span><strong id="statUploadedMonth">—</strong
+                  ><small><em>Được tạo từ đầu tháng</em></small>
+                </div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon orange">⇩</div>
+                <div>
+                  <span>Lượt tải xuống</span><strong id="statDownloads">—</strong
+                  ><small><em id="statDownloadsNote">Chưa có nhật ký tải xuống</em></small>
+                </div>
+              </article>
+              <article class="stat-card">
+                <div class="stat-icon green">◈</div>
+                <div>
+                  <span>Dung lượng sử dụng</span><strong id="statStorage">—</strong
+                  ><small
+                    ><em id="storageQuotaNote" data-no-translate
+                      >Chỉ tính tài liệu sở hữu</em
+                    ></small
+                  >
+                </div>
+              </article>
+            </div>
+
+            <div class="dashboard-grid">
+              <section class="panel activity-panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Hoạt động gần đây</h2>
+                    <p>Những thay đổi mới nhất trong hệ thống</p>
+                  </div>
+                  <button class="link-btn" data-page="activity">Xem tất cả →</button>
+                </div>
+                <div class="activity-list" id="dashboardActivity">
+                  <div class="dashboard-loading">Đang tải dữ liệu...</div>
+                </div>
+              </section>
+
+              <section class="panel storage-panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Phân bổ lưu trữ</h2>
+                    <p id="storageScope" data-no-translate>
+                      Tài liệu sở hữu, không tính file được chia sẻ
+                    </p>
+                  </div>
+                  <button class="more">⋮</button>
+                </div>
+                <div class="donut-wrap">
+                  <div class="donut" id="storageDonut">
+                    <div><strong id="donutStorage">—</strong><span>Tổng dung lượng</span></div>
+                  </div>
+                </div>
+                <div class="storage-breakdown" id="storageBreakdown">
+                  <div class="dashboard-loading">Đang tải dữ liệu...</div>
+                </div>
+                <p class="storage-note hidden" id="storageAccountingNote" data-no-translate></p>
+              </section>
+            </div>
+
+            <section class="panel table-panel hidden" id="adminStoragePanel">
+              <div class="panel-head">
+                <div>
+                  <h2 data-no-translate id="adminStorageTitle">Dung lượng theo tài khoản</h2>
+                  <p id="systemStorageUsage" data-no-translate>—</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead id="adminStorageHead"></thead>
+                  <tbody id="adminStorageRows"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel table-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Tài liệu mới nhất</h2>
+                  <p>5 tài liệu được cập nhật gần đây</p>
+                </div>
+                <button class="link-btn" data-page="documents">Xem tất cả →</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>TÊN TÀI LIỆU</th>
+                      <th>NGƯỜI SỞ HỮU</th>
+                      <th>PHÒNG BAN</th>
+                      <th>CẬP NHẬT</th>
+                      <th>DUNG LƯỢNG</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="recentTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="documentsPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow">KHO TÀI LIỆU</p>
+                <h1>Tất cả tài liệu</h1>
+                <p class="muted">Quản lý và truy cập toàn bộ tài liệu doanh nghiệp.</p>
+              </div>
+              <button class="primary-btn" id="openUpload2">＋ Tải tài liệu lên</button>
+            </div>
+            <div class="toolbar">
+              <label class="search-field"
+                >⌕ <input id="documentSearch" placeholder="Tìm kiếm tài liệu..."
+              /></label>
+              <select id="typeFilter">
+                <option value="">Tất cả loại</option>
+                <option>PDF</option>
+                <option>XLSX</option>
+                <option>DOCX</option>
+                <option>PPTX</option>
+              </select>
+              <select id="departmentFilter" aria-label="Lọc theo phòng ban">
+                <option value="">Tất cả phòng ban</option>
+              </select>
+              <button class="filter-btn">⚙ Bộ lọc</button>
+            </div>
+            <div class="bulk-toolbar"><span id="documentSelectionCount">Đã chọn 0</span><button id="bulkDelete" class="danger-btn" disabled onclick="bulkDocuments('delete')">Chuyển vào thùng rác</button><button id="bulkShare" class="secondary-btn" disabled onclick="bulkDocuments('share')">Chia sẻ đã chọn</button><button id="bulkDownload" class="secondary-btn" disabled onclick="bulkDocuments('download')">Tải xuống đã chọn</button></div>
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th><input id="selectAllDocuments" type="checkbox" aria-label="Chọn tất cả tài liệu đang hiển thị" onchange="selectAllDocuments(this.checked)"></th>
+                      <th>TÊN TÀI LIỆU</th>
+                      <th>NGƯỜI SỞ HỮU</th>
+                      <th>PHÒNG BAN</th>
+                      <th>CẬP NHẬT</th>
+                      <th>DUNG LƯỢNG</th>
+                      <th>TRẠNG THÁI</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="documentTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="collectionPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow" id="collectionEyebrow">TÀI LIỆU</p>
+                <h1 id="collectionTitle">Danh sách tài liệu</h1>
+                <p class="muted" id="collectionDesc"></p>
+              </div>
+            </div>
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>TÊN TÀI LIỆU</th>
+                      <th>NGƯỜI SỞ HỮU</th>
+                      <th>PHÒNG BAN</th>
+                      <th>CẬP NHẬT</th>
+                      <th>DUNG LƯỢNG</th>
+                      <th>TRẠNG THÁI</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="collectionTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="trashPage" class="page hidden">
+  <div class="page-heading compact"><div><p class="eyebrow">THÙNG RÁC</p><h1>Thùng rác</h1><p class="muted">File trong thùng rác vẫn tính dung lượng. Khôi phục sẽ đưa tài liệu về trạng thái hoạt động và giữ quyền chia sẻ trước đó.</p></div><button class="secondary-btn" onclick="loadTrash()">Làm mới</button></div>
+  <div class="bulk-toolbar"><span id="trashSelectionCount">Đã chọn 0</span><button id="restoreSelected" class="secondary-btn" disabled onclick="trashAction('restore')">Khôi phục đã chọn</button><button id="purgeSelected" class="danger-btn" disabled onclick="trashAction('purge')">Xóa vĩnh viễn đã chọn</button></div>
+  <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th><input id="selectAllTrash" type="checkbox" aria-label="Chọn tất cả trong thùng rác" onchange="selectAllTrash(this.checked)"></th><th>TÊN TÀI LIỆU</th><th>DUNG LƯỢNG</th><th>ĐÃ XÓA LÚC</th><th>THAO TÁC</th></tr></thead><tbody id="trashTable"></tbody></table></div></section>
+</div>
+<div id="workTasksPage" class="page hidden">
+  <div class="page-heading compact"><div><p class="eyebrow">CÔNG VIỆC</p><h1>Giao việc và báo cáo</h1><p class="muted">Theo dõi hạn nộp, gửi tài liệu báo cáo và phản hồi duyệt.</p></div><button id="openWorkTaskCreate" class="primary-btn hidden" type="button">+ Giao việc</button></div>
+  <div class="work-toolbar"><label>Hiển thị <select id="workTaskFilter"><option value="mine">Việc giao cho tôi</option><option value="assigned" data-work-admin>Tôi giao</option><option value="review" data-work-admin>Chờ tôi duyệt</option><option value="completed">Đã hoàn thành</option><option value="overdue">Quá hạn</option><option value="all" data-work-admin>Tất cả công việc</option></select></label><label class="work-search">Tìm kiếm <input id="workTaskSearch" placeholder="Tên việc, người thực hiện..." /></label><button id="refreshWorkTasks" class="secondary-btn" type="button">Làm mới</button></div>
+  <div id="workTaskSummary" class="work-summary" role="status"></div><div id="workTaskBulk" class="bulk-toolbar hidden"><span id="workTaskSelectionCount">Đã chọn 0 công việc</span><button id="deleteSelectedWorkTasks" type="button" class="danger-btn" disabled>Xóa đã chọn</button></div>
+  <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th data-work-selection class="hidden"><input id="selectAllWorkTasks" type="checkbox" aria-label="Chọn tất cả công việc có thể xóa" /></th><th>CÔNG VIỆC</th><th>NGƯỜI THỰC HIỆN</th><th>NGƯỜI GIAO</th><th>HẠN NỘP</th><th>TRẠNG THÁI</th><th></th></tr></thead><tbody id="workTaskTable"></tbody></table></div></section>
+</div>
+<div id="activityPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow">AUDIT LOG</p>
+                <h1>Nhật ký hoạt động</h1>
+                <p class="muted">Theo dõi các hoạt động được ghi nhận trong hệ thống.</p>
+              </div>
+            </div>
+            <div id="activityContent">
+              <section class="panel empty-state">
+                <div class="empty-icon">◌</div>
+                <h2>Đang tải nhật ký...</h2>
+                <p>Đang lấy dữ liệu từ hệ thống.</p>
+              </section>
+            </div>
+          </div>
+
+          <div id="settingsPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow" id="settingsEyebrow">TÙY CHỈNH</p>
+                <h1 id="settingsTitle">Cài đặt</h1>
+                <p class="muted" id="settingsDescription">
+                  Cá nhân hóa giao diện và trải nghiệm của bạn.
+                </p>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <section class="panel settings-card">
+                <div class="settings-icon">◐</div>
+                <div class="settings-copy">
+                  <h2 id="appearanceTitle">Giao diện</h2>
+                  <p id="appearanceDescription">Chọn giao diện sáng hoặc tối.</p>
+                </div>
+                <div class="theme-options">
+                  <label class="theme-option"
+                    ><input type="radio" name="theme" value="light" /><span
+                      >☀ <b id="lightThemeLabel">Sáng</b></span
+                    ></label
+                  >
+                  <label class="theme-option"
+                    ><input type="radio" name="theme" value="dark" /><span
+                      >☾ <b id="darkThemeLabel">Tối</b></span
+                    ></label
+                  >
+                </div>
+              </section>
+              <section class="panel settings-card">
+                <div class="settings-icon">🔔</div>
+                <div class="settings-copy">
+                  <h2 id="personalNotificationTitle">Thông báo cá nhân</h2>
+                  <p id="personalNotificationDescription">
+                    Kiểm soát cách thông báo xuất hiện trên tài khoản này.
+                  </p>
+                </div>
+                <div class="setting-toggles">
+                  <label
+                    ><span
+                      ><b id="receiveNotificationsLabel">Nhận thông báo</b
+                      ><small id="receiveNotificationsHelp"
+                        >Hiển thị thông báo chung từ ADMIN.</small
+                      ></span
+                    ><input type="checkbox" id="settingNotifications"
+                  /></label>
+                  <label
+                    ><span
+                      ><b id="badgeNotificationsLabel">Dấu thông báo mới</b
+                      ><small id="badgeNotificationsHelp"
+                        >Hiển thị chấm đỏ khi có thông báo chưa xem.</small
+                      ></span
+                    ><input type="checkbox" id="settingNotificationBadge"
+                  /></label>
+                  <label
+                    ><span
+                      ><b id="refreshNotificationsLabel">Tự động cập nhật</b
+                      ><small id="refreshNotificationsHelp"
+                        >Kiểm tra thông báo mới sau mỗi 30 giây.</small
+                      ></span
+                    ><input type="checkbox" id="settingNotificationRefresh"
+                  /></label>
+                </div>
+              </section>
+              <section class="panel settings-card">
+                <div class="settings-icon">文</div>
+                <div class="settings-copy">
+                  <h2 id="languageTitle">Ngôn ngữ</h2>
+                  <p id="languageDescription">Chọn ngôn ngữ hiển thị chính.</p>
+                </div>
+                <label class="language-field"
+                  ><span id="languageLabel">Ngôn ngữ giao diện</span
+                  ><select id="settingLanguage">
+                    <option value="vi">Tiếng Việt</option>
+                    <option value="en">English</option>
+                  </select></label
+                >
+              </section>
+            </div>
+            <p id="settingsSaved" class="settings-saved hidden" role="status">✓ Đã lưu cài đặt</p>
+          </div>
+
+          <div id="genericPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow" id="genericEyebrow">CLOUDDOCS</p>
+                <h1 id="genericTitle">Trang</h1>
+                <p class="muted" id="genericDesc"></p>
+              </div>
+            </div>
+            <section class="panel empty-state">
+              <div class="empty-icon">☁</div>
+              <h2 id="emptyTitle">Khu vực sẵn sàng</h2>
+              <p>Tính năng này sẽ được kết nối với REST API ở các bước tiếp theo.</p>
+            </section>
+          </div>
+
+          <div id="profilePage" class="page hidden">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">TÀI KHOẢN CỦA BẠN</p>
+                <h1>Hồ sơ cá nhân</h1>
+                <p class="muted">Cập nhật thông tin cá nhân và bảo mật tài khoản.</p>
+              </div>
+            </div>
+            <div class="profile-grid">
+              <section class="panel">
+                <div class="panel-head">
+                  <div>
+                    <h2>Thông tin cá nhân</h2>
+                    <p>Email liên hệ của hồ sơ CloudDocs.</p>
+                  </div>
+                </div>
+                <form id="profileForm" class="profile-form">
+                  <label class="edit-field"
+                    ><span>Tên đăng nhập</span
+                    ><input id="profileUsername" readonly autocomplete="username" /><small
+                      class="muted"
+                      >Mã tài khoản nội bộ được giữ cố định.</small
+                    ></label
+                  >
+                  <label class="edit-field"
+                    ><span>Họ và tên</span
+                    ><input id="profileFullName" required maxlength="120" autocomplete="name"
+                  /></label>
+                  <label class="edit-field"
+                    ><span>Email</span
+                    ><input
+                      id="profileEmail"
+                      type="email"
+                      required
+                      maxlength="150"
+                      autocomplete="email"
+                  /></label>
+                  <label class="edit-field"
+                    ><span>Phòng ban</span
+                    ><input
+                      id="profileDepartment"
+                      required
+                      maxlength="100"
+                      autocomplete="organization-title"
+                  /></label>
+                  <div class="profile-account-meta">
+                    <span>Quyền: <strong id="profileRole"></strong></span
+                    ><span>Trạng thái: <strong id="profileStatus"></strong></span>
+                  </div>
+                  <p
+                    id="profileMessage"
+                    class="profile-message hidden"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <div class="profile-actions">
+                    <button type="button" id="resetProfile" class="secondary-btn">Hoàn tác</button
+                    ><button type="submit" id="saveProfile" class="primary-btn">
+                      Lưu thay đổi
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+            </div>
+          </div>
+
+          <div id="usersPage" class="page hidden">
+            <div class="page-heading compact">
+              <div>
+                <p class="eyebrow">QUẢN TRỊ NGƯỜI DÙNG</p>
+                <h1>Người dùng</h1>
+                <p class="muted">Quản lý tài khoản và quyền truy cập trong CloudDocs.</p>
+              </div>
+            </div>
+            <section class="panel table-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Danh sách tài khoản</h2>
+                  <p>Chỉ ADMIN mới có quyền thay đổi role và trạng thái.</p>
+                </div>
+                <button class="link-btn" id="refreshUsers">↻ Làm mới</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>NGƯỜI DÙNG</th>
+                      <th>EMAIL</th>
+                      <th>PHÒNG BAN</th>
+                      <th>QUYỀN</th>
+                      <th>TRẠNG THÁI</th>
+                      <th>NGÀY TẠO</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="userTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="modal-backdrop hidden" id="shareModal">
+      <div class="modal share-modal">
+        <div class="modal-head">
+          <div>
+            <h2>Chia sẻ tài liệu</h2>
+            <p id="shareDocumentName">—</p>
+          </div>
+          <button class="close" id="closeShare">×</button>
+        </div>
+
+        <div class="share-body">
+          <div class="share-form">
+            <label class="share-label">Chọn người dùng</label>
+            <input
+              id="shareUserSearch"
+              class="share-input"
+              placeholder="Tìm theo tên, username hoặc email..."
+            />
+            <select id="shareUserSelect" class="share-select" size="5"></select>
+
+            <div class="share-permission-row">
+              <label class="share-label">Quyền truy cập</label>
+              <select id="sharePermission" class="share-select-one">
+                <option value="VIEW">VIEW — Chỉ xem</option>
+                <option value="DOWNLOAD">DOWNLOAD — Xem và tải xuống</option>
+                <option value="EDIT">EDIT — Xem, tải xuống và chỉnh sửa</option>
+              </select>
+            </div>
+            <button class="primary-btn" id="grantPermission">Cấp quyền</button>
+          </div>
+
+          <div class="shared-list-section">
+            <div class="share-list-title">
+              <strong>Người đang được chia sẻ</strong><span id="shareCount">0</span>
+            </div>
+            <div id="permissionList" class="permission-list">
+              <div class="share-empty">Chưa chia sẻ cho ai.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="editModal">
+      <div class="modal edit-modal">
+        <div class="modal-head">
+          <div>
+            <h2>Chỉnh sửa tài liệu</h2>
+            <p id="editDocumentName">—</p>
+          </div>
+          <button class="close" id="closeEdit">×</button>
+        </div>
+        <div class="edit-body">
+          <label class="edit-field"
+            ><span>Tên tài liệu</span><input id="editTitle" maxlength="255" required
+          /></label>
+          <label class="edit-field"
+            ><span>Phòng ban</span>
+            <select id="editDepartment">
+              <option value="">Đang tải phòng ban...</option>
+            </select>
+          </label>
+          <label class="edit-field"
+            ><span>Mô tả</span
+            ><textarea
+              id="editDescription"
+              rows="4"
+              maxlength="1000"
+              placeholder="Mô tả ngắn..."
+            ></textarea>
+          </label>
+          <label class="edit-field"
+            ><span>Trạng thái</span>
+            <select id="editStatus">
+              <option value="ACTIVE">ACTIVE — Hoạt động</option>
+              <option value="ARCHIVED">ARCHIVED — Lưu trữ</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-btn" id="cancelEdit">Hủy</button
+          ><button class="primary-btn" id="saveEdit">Lưu thay đổi</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="uploadModal">
+      <div class="modal">
+        <div class="modal-head">
+          <div>
+            <h2>Thêm tài liệu</h2>
+            <p>
+              Giai đoạn này lưu thông tin tài liệu vào MySQL. File sẽ kết nối S3 ở bước tiếp theo.
+            </p>
+          </div>
+          <button class="close" id="closeUpload">×</button>
+        </div>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" multiple />
+          <div class="upload-cloud">☁</div>
+          <strong>Kéo thả file vào đây</strong><span>hoặc <u>chọn file từ máy tính</u></span
+          ><small>PDF, DOCX, XLSX, PPTX, ZIP · tối đa 100 MB/file</small>
+        </label>
+        <div
+          class="form-row"
+          style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;"
+        >
+          <label
+            style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5d6675;font-weight:600;"
+            >Phòng ban
+            <select
+              id="uploadDepartment"
+              style="padding:10px 12px;border:1px solid #d7deeb;border-radius:10px;background:#fff;color:#202938;"
+            >
+              <option value="">Đang tải phòng ban...</option>
+            </select>
+          </label>
+          <label
+            style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5d6675;font-weight:600;"
+            >Mô tả
+            <input
+              id="uploadDescription"
+              placeholder="Mô tả ngắn (không bắt buộc)"
+              style="padding:10px 12px;border:1px solid #d7deeb;border-radius:10px;"
+            />
+          </label>
+        </div>
+        <div id="selectedFiles"></div>
+        <div class="modal-actions">
+          <button class="secondary-btn" id="cancelUpload">Hủy</button
+          ><button class="primary-btn" id="confirmUpload">Lưu tài liệu</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="notificationModal">
+      <div class="modal notification-modal">
+        <div class="modal-head">
+          <div>
+            <h2>Gửi thông báo chung</h2>
+            <p>Thông báo sẽ hiển thị cho tất cả tài khoản.</p>
+          </div>
+          <button class="close" id="closeNotificationModal">×</button>
+        </div>
+        <form id="notificationForm">
+          <div class="notification-form-body">
+            <label class="edit-field"
+              ><span>Tiêu đề</span
+              ><input
+                id="notificationTitle"
+                required
+                maxlength="150"
+                placeholder="Ví dụ: Bảo trì hệ thống"
+            /></label>
+            <label class="edit-field"
+              ><span>Nội dung</span
+              ><textarea
+                id="notificationMessage"
+                required
+                maxlength="1000"
+                rows="5"
+                placeholder="Nhập nội dung thông báo..."
+              ></textarea>
+            </label>
+            <p id="notificationFormError" class="profile-message hidden" role="alert"></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="secondary-btn" id="cancelNotification">Hủy</button
+            ><button type="submit" class="primary-btn" id="sendNotification">
+              Gửi tới tất cả user
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-backdrop hidden" id="notificationDetailModal">
+      <div class="modal notification-detail-modal">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">THÔNG BÁO</p>
+            <h2 id="notificationDetailTitle" data-no-translate>—</h2>
+          </div>
+          <button class="close" id="closeNotificationDetail">×</button>
+        </div>
+        <div class="notification-detail-body">
+          <p id="notificationDetailMessage" data-no-translate></p>
+          <small id="notificationDetailMeta" data-no-translate></small>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="secondary-btn hidden" id="notificationTaskLink">Xem công việc</button>
+          <button type="button" class="primary-btn" id="okayNotificationDetail">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast hidden" id="toast">✓ <span></span></div>
+
+<div id="workTaskCreateModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskCreateTitle"><div class="modal-head"><h2 id="workTaskCreateTitle">Giao công việc mới</h2><button type="button" class="close" id="closeWorkTaskCreate" aria-label="Đóng">×</button></div><form id="workTaskCreateForm"><div class="work-form-body"><label>Tên công việc<input id="workTaskTitle" required maxlength="255" placeholder="Ví dụ: Báo cáo tình hình sử dụng tài liệu" /></label><label>Yêu cầu<textarea id="workTaskDescription" required maxlength="2000" rows="4" placeholder="Nội dung, kết quả cần đạt, định dạng báo cáo..."></textarea></label><label>Người thực hiện<select id="workTaskAssignee" required></select></label><label>Hạn nộp<input id="workTaskDue" type="datetime-local" required /></label><p id="workTaskCreateError" class="work-error" role="alert"></p></div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelWorkTaskCreate">Hủy</button><button type="submit" class="primary-btn" id="confirmWorkTaskCreate">Giao việc</button></div></form></div></div>
+<div id="workTaskDetailModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskDetailTitle"><div class="modal-head"><h2 id="workTaskDetailTitle">Chi tiết công việc</h2><button type="button" class="close" id="closeWorkTaskDetail" aria-label="Đóng">×</button></div><div class="work-form-body" id="workTaskDetailContent"></div></div></div>
+
+    <script src="js/cognito-config.js?v=20261106-work-tasks"></script>
+    <script src="js/cognito-auth.js?v=20261106-work-tasks"></script>
+    <script src="js/app.js?v=20261106-work-tasks"></script>
+    <script src="js/work-tasks.js?v=20261106-work-tasks"></script>
+  </body>
+</html>

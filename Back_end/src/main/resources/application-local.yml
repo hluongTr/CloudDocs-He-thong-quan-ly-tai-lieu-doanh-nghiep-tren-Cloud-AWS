@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      # Schema is migrated explicitly before the app starts.
+      # This prevents Hibernate from silently changing the permission schema.
+      ddl-auto: validate
+
+# Local development uses the same Cognito authentication as production.
+
+app:
+  local-storage:
+    directory: ./storage

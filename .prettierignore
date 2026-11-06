@@ -1,0 +1,8 @@
+**/target/
+**/node_modules/
+Back_end/storage/
+uploads/
+.env
+.env.*
+**/credentials
+**/application-secrets.yml

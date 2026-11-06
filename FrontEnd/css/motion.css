@@ -1,0 +1,316 @@
+/* Motion layer: short, transform-based entrances and consistent interaction feedback. */
+:root {
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-fast: 180ms;
+  --motion-normal: 320ms;
+  --motion-enter: 480ms;
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes fill-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Backwards fill hides delayed items only during entry; hover remains free afterwards. */
+.auth-card,
+.page > .page-heading,
+.page > .toolbar,
+.page > .panel,
+.dashboard-grid > .panel,
+.stat-card {
+  animation: reveal-up var(--motion-enter) var(--motion-ease) backwards;
+}
+.stat-card:nth-child(1) {
+  animation-delay: 40ms;
+}
+.stat-card:nth-child(2) {
+  animation-delay: 90ms;
+}
+.stat-card:nth-child(3) {
+  animation-delay: 140ms;
+}
+.stat-card:nth-child(4) {
+  animation-delay: 190ms;
+}
+.dashboard-grid > .panel:nth-child(1) {
+  animation-delay: 140ms;
+}
+.dashboard-grid > .panel:nth-child(2) {
+  animation-delay: 200ms;
+}
+.page > .table-panel {
+  animation-delay: 160ms;
+}
+.activity-row,
+.permission-row,
+.selected-file {
+  animation: reveal-up var(--motion-normal) var(--motion-ease) backwards;
+}
+tbody tr {
+  animation: fade-in var(--motion-normal) ease-out backwards;
+}
+tbody tr:nth-child(2),
+.activity-row:nth-child(2) {
+  animation-delay: 30ms;
+}
+tbody tr:nth-child(3),
+.activity-row:nth-child(3) {
+  animation-delay: 60ms;
+}
+tbody tr:nth-child(4),
+.activity-row:nth-child(4) {
+  animation-delay: 90ms;
+}
+tbody tr:nth-child(5),
+.activity-row:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.modal-backdrop,
+.preview-overlay {
+  animation: fade-in 220ms ease-out;
+}
+.modal,
+.preview-container {
+  animation: dialog-in var(--motion-enter) var(--motion-ease) backwards;
+}
+.toast {
+  animation: toast-in var(--motion-normal) var(--motion-ease);
+}
+.auth-error:not(.hidden),
+.share-error {
+  animation: reveal-up 240ms var(--motion-ease);
+}
+.progress i {
+  transform-origin: left center;
+  animation: fill-in 700ms var(--motion-ease) backwards;
+  transition: width 600ms var(--motion-ease);
+}
+.donut {
+  animation: dialog-in 650ms var(--motion-ease) backwards;
+}
+
+button,
+.nav-item {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+}
+.stat-card,
+.panel,
+.storage-card {
+  transition:
+    transform var(--motion-normal) var(--motion-ease),
+    box-shadow var(--motion-normal) ease,
+    border-color var(--motion-normal) ease;
+}
+.stat-icon,
+.nav-item > span,
+.upload-cloud,
+.file-icon {
+  transition: transform var(--motion-normal) var(--motion-ease);
+}
+input,
+select,
+textarea,
+.global-search,
+.search-field,
+.dropzone {
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+tbody tr,
+.activity-row,
+.permission-row {
+  transition: background-color var(--motion-fast) ease;
+}
+.global-search:focus-within,
+.search-field:focus-within {
+  border-color: #315bea;
+  box-shadow: 0 0 0 4px #315bea12;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #315bea;
+  outline-offset: 3px;
+}
+button:enabled:active {
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+.primary-btn:disabled::after {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-left: 8px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+/* Hover motion only on devices with a precise pointer. */
+@media (hover: hover) and (pointer: fine) {
+  .primary-btn:enabled:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px #315bea30;
+  }
+  :is(
+      .secondary-btn,
+      .filter-btn,
+      .upgrade-btn,
+      .table-action,
+      .share-btn,
+      .delete-btn,
+      .danger-btn
+    ):enabled:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px #1720330d;
+  }
+  .nav-item:hover {
+    transform: translateX(3px);
+  }
+  .nav-item:hover > span {
+    transform: scale(1.12);
+  }
+  .stat-card:hover {
+    transform: translateY(-4px);
+    border-color: #ccd7fa;
+    box-shadow: 0 12px 28px #315bea12;
+  }
+  .stat-card:hover .stat-icon {
+    transform: rotate(-5deg) scale(1.06);
+  }
+  .panel:hover {
+    border-color: #d8e0ee;
+    box-shadow: 0 6px 20px #17203308;
+  }
+  tbody tr:hover .file-icon {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+  .activity-row:hover,
+  .permission-row:hover {
+    background-color: #f3f6ff;
+  }
+  .dropzone:hover {
+    border-color: #315bea;
+    background-color: #f0f4ff;
+  }
+  .dropzone:hover .upload-cloud {
+    transform: translateY(-5px);
+  }
+  :is(.close, .preview-close):enabled:hover {
+    color: #315bea;
+    transform: rotate(90deg);
+  }
+  button:enabled:active {
+    transform: scale(0.97);
+  }
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    transition: transform var(--motion-normal) var(--motion-ease);
+  }
+  .toast {
+    right: 16px;
+    bottom: 16px;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* Respect the operating system's accessibility preference, including spinners. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  button:enabled:hover,
+  button:enabled:active,
+  .nav-item:hover,
+  .nav-item:hover > span,
+  .stat-card:hover,
+  .stat-card:hover .stat-icon,
+  tbody tr:hover .file-icon,
+  .dropzone:hover .upload-cloud {
+    transform: none;
+  }
+}
+
+.bulk-toolbar {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0;}
+.bulk-toolbar > span {font-weight:600;margin-right:auto;}
+.bulk-toolbar button:disabled {opacity:.45;cursor:not-allowed;}
+.document-select, #selectAllDocuments, #trashPage input {width:17px;height:17px;cursor:pointer;accent-color:#315bea;}
+.notification-entry {position:relative;display:flex;align-items:stretch;}
+.notification-entry .notification-item {flex:1;min-width:0;padding-right:40px;}
+.notification-delete {position:absolute;right:10px;top:12px;border:0;background:transparent;color:#d14343;font-size:24px;cursor:pointer;line-height:1;padding:4px;}
+.notification-delete:hover {background:#fee2e2;border-radius:6px;}
+.trash-empty {text-align:center;padding:40px;}
+
+/* Disabled report buttons are not pending network requests. */
+#workTaskDetailContent .primary-btn:disabled:not([aria-busy="true"])::after, #workTaskCreateModal .primary-btn:disabled::after {display:none;}
+#workTaskDetailContent .primary-btn[aria-busy="true"]::after {display:inline-block;}

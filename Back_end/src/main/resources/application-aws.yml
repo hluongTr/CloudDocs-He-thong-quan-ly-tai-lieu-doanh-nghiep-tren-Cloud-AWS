@@ -1,0 +1,9 @@
+spring:
+  config:
+    activate:
+      on-profile: aws
+  jpa:
+    hibernate:
+      ddl-auto: validate
+# Cognito configuration is shared in application.yml, independently of the profile.
+# In AWS, prefer an attached IAM role for storage credentials.
