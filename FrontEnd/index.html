@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CloudDocs — Quản lý tài liệu doanh nghiệp</title>
-    <link rel="icon" type="image/png" href="assets/clouddocs-logo.png?v=20261106-work-task-selection" />
-    <link rel="apple-touch-icon" href="assets/clouddocs-logo.png?v=20261106-work-tasks" />
-    <link rel="stylesheet" href="css/style.css?v=20261106-work-tasks" />
-    <link rel="stylesheet" href="css/motion.css?v=20261106-work-tasks" />
+    <link rel="icon" type="image/png" href="assets/clouddocs-logo.png?v=20261108-storage-limit" />
+    <link rel="apple-touch-icon" href="assets/clouddocs-logo.png?v=20261108-storage-limit" />
+    <link rel="stylesheet" href="css/style.css?v=20261108-storage-limit" />
+    <link rel="stylesheet" href="css/motion.css?v=20261108-storage-limit" />
   </head>
   <body>
     <div id="authScreen" class="auth-screen">
       <main class="auth-card">
         <div class="auth-brand">
-          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261106-work-tasks" width="50" height="50" alt="Logo CloudDocs" decoding="async" />
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261108-storage-limit" width="50" height="50" alt="Logo CloudDocs" decoding="async" />
           <div><strong>CloudDocs</strong><span>ENTERPRISE CLOUD</span></div>
         </div>
         <h1>Hệ thống quản lý<span>tài liệu doanh nghiệp</span></h1>
@@ -27,7 +27,7 @@
     <div class="app-shell hidden" id="appShell">
       <aside class="sidebar">
         <a class="brand" href="#" data-page="dashboard" aria-label="CloudDocs - Tổng quan">
-          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261106-work-tasks" width="38" height="38" alt="Logo CloudDocs" decoding="async" />
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261108-storage-limit" width="38" height="38" alt="Logo CloudDocs" decoding="async" />
           <div>
             <strong>CloudDocs</strong>
             <span>Enterprise Cloud</span>
@@ -246,7 +246,16 @@
             </section>
           </div>
 
-          <div id="documentsPage" class="page hidden">
+          <div id="storageManagementPage" class="page hidden">
+ <div class="page-heading compact"><div><p class="eyebrow">LƯU TRỮ</p><h1>Quản lý dung lượng</h1><p id="storageManagementScope" class="muted"></p></div><button id="refreshStorageManagement" type="button" class="secondary-btn">Làm mới</button></div>
+ <p id="storageManagementStatus" class="muted" role="status"></p><p id="storageManagementError" role="alert" class="work-error"></p>
+ <div id="storageManagementContent">
+ <div class="storage-management-stats"><section class="panel storage-metric"><span>Đã dùng / Tổng hạn mức</span><strong id="managedUsage">—</strong><div class="storage-meter"><div id="managedProgress"></div></div></section><section class="panel storage-metric"><span>Dung lượng còn khả dụng</span><strong id="managedRemaining">—</strong><small id="managedFileCount"></small></section><section class="panel storage-metric"><span>Trong thùng rác</span><strong id="managedTrash">—</strong><button class="secondary-btn" type="button" data-page="trash">Mở thùng rác</button></section></div>
+ <div class="storage-management-grid"><section class="panel storage-chart-card"><div class="panel-head"><div><h2>Phân bố lưu trữ</h2><p>Tỷ trọng dung lượng theo định dạng tài liệu</p></div></div><div id="managedDonut" class="managed-donut"><div><strong id="managedDonutTotal">—</strong><small>đã phân bổ</small></div></div><div id="managedLegend" class="managed-legend"></div><p id="managedAccounting" class="muted storage-management-note"></p></section>
+ <section class="panel table-panel"><div class="panel-head"><div><h2>Tài liệu chiếm dung lượng</h2><p>Sắp xếp từ lớn đến nhỏ; gồm tài liệu trong thùng rác.</p></div></div><div class="storage-file-toolbar"><input id="managedFileSearch" type="search" aria-label="Tìm tài liệu theo tên, chủ sở hữu hoặc định dạng" placeholder="Tìm tên tài liệu, chủ sở hữu, định dạng…" /></div><div class="table-wrap"><table><thead><tr><th>TÀI LIỆU</th><th>NGƯỜI SỞ HỮU</th><th>DUNG LƯỢNG</th><th>TỶ TRỌNG</th><th>TRẠNG THÁI</th><th></th></tr></thead><tbody id="managedFiles"></tbody></table></div><div class="storage-list-footer"><span id="managedResultCount" class="muted"></span><button id="managedShowMore" class="secondary-btn hidden" type="button">Xem thêm</button></div></section></div>
+ <section id="managedAccountsPanel" class="panel table-panel hidden"><div class="panel-head"><div><h2>Dung lượng theo tài khoản</h2><p>Hạn mức từng tài khoản vẫn được kiểm tra riêng khi tải lên.</p></div></div><div class="table-wrap"><table><thead><tr><th>HỌ VÀ TÊN</th><th>QUYỀN</th><th>ĐÃ DÙNG</th><th>HẠN MỨC</th><th>MỨC SỬ DỤNG</th></tr></thead><tbody id="managedAccounts"></tbody></table></div></section>
+ </div></div>
+<div id="documentsPage" class="page hidden">
             <div class="page-heading compact">
               <div>
                 <p class="eyebrow">KHO TÀI LIỆU</p>
@@ -752,9 +761,10 @@
 <div id="workTaskCreateModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskCreateTitle"><div class="modal-head"><h2 id="workTaskCreateTitle">Giao công việc mới</h2><button type="button" class="close" id="closeWorkTaskCreate" aria-label="Đóng">×</button></div><form id="workTaskCreateForm"><div class="work-form-body"><label>Tên công việc<input id="workTaskTitle" required maxlength="255" placeholder="Ví dụ: Báo cáo tình hình sử dụng tài liệu" /></label><label>Yêu cầu<textarea id="workTaskDescription" required maxlength="2000" rows="4" placeholder="Nội dung, kết quả cần đạt, định dạng báo cáo..."></textarea></label><label>Người thực hiện<select id="workTaskAssignee" required></select></label><label>Hạn nộp<input id="workTaskDue" type="datetime-local" required /></label><p id="workTaskCreateError" class="work-error" role="alert"></p></div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelWorkTaskCreate">Hủy</button><button type="submit" class="primary-btn" id="confirmWorkTaskCreate">Giao việc</button></div></form></div></div>
 <div id="workTaskDetailModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskDetailTitle"><div class="modal-head"><h2 id="workTaskDetailTitle">Chi tiết công việc</h2><button type="button" class="close" id="closeWorkTaskDetail" aria-label="Đóng">×</button></div><div class="work-form-body" id="workTaskDetailContent"></div></div></div>
 
-    <script src="js/cognito-config.js?v=20261106-work-tasks"></script>
-    <script src="js/cognito-auth.js?v=20261106-work-tasks"></script>
-    <script src="js/app.js?v=20261106-work-tasks"></script>
-    <script src="js/work-tasks.js?v=20261106-work-tasks"></script>
+    <script src="js/cognito-config.js?v=20261108-storage-limit"></script>
+    <script src="js/cognito-auth.js?v=20261108-storage-limit"></script>
+    <script src="js/app.js?v=20261108-storage-limit"></script>
+    <script src="js/storage-management.js?v=20261108-storage-limit"></script>
+<script src="js/work-tasks.js?v=20261108-storage-limit"></script>
   </body>
 </html>

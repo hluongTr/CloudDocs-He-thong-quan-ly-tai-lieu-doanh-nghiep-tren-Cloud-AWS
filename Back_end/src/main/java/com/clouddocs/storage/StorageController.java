@@ -1,22 +1,22 @@
 package com.clouddocs.storage;
 
-import com.clouddocs.auth.UserRepository;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class StorageController {
-    private final UserRepository users;
-    private final StorageQuotaService quotas;
+    private final StorageManagementService management;
 
-    public StorageController(UserRepository users, StorageQuotaService quotas) {
-        this.users = users;
-        this.quotas = quotas;
+    public StorageController(StorageManagementService management) {
+        this.management=management;
     }
+
+    @GetMapping("/api/storage/management")
+    public StorageManagementService.Report management(Authentication authentication){return management.management(authentication.getName());}
 
     @GetMapping("/api/storage/usage")
     public StorageQuotaService.Usage usage(Authentication authentication) {
-        return quotas.usage(users.findByUsernameIgnoreCase(authentication.getName()).orElseThrow());
+        return management.summary(authentication.getName());
     }
 }

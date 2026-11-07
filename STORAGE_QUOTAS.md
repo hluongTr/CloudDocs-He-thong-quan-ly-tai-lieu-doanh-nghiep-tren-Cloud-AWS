@@ -50,3 +50,13 @@ Live checks: upload a small TXT/PDF/image, compare metadata and chart; share wit
 account; trash and restore; permanently delete; test size/quota boundaries with temporary
 small test limits; attempt two simultaneous uploads when only one fits. Use disposable test
 files and a separate test environment. No cleanup script should delete the user's real files.
+
+## Trang quản lý dung lượng
+
+Nút Quản lý dung lượng mở trang riêng. ADMIN xem dung lượng tất cả tài khoản, USER chỉ xem tài liệu mình sở hữu. Ô dung lượng sidebar dùng cùng phạm vi này. Hạn mức hệ thống dùng cấu hình storage.quota.admin-bytes, mặc định 1 TB; không cộng hạn mức từng tài khoản. Quy định giới hạn upload của từng chủ sở hữu giữ nguyên.
+
+- GET /api/storage/usage: tổng dung lượng theo vai trò, gồm file hoạt động, thùng rác và phân bổ chưa xác nhận; bỏ PURGED.
+- GET /api/storage/management: cùng tổng trên, phân bố theo loại, phần thùng rác, danh sách file giảm dần theo kích thước và bảng tài khoản (chỉ ADMIN). Kích thước chưa biết xếp cuối và không coi là 0.
+- File chia sẻ chỉ tính một lần theo chủ sở hữu. Số liệu là metadata của ứng dụng, không quét phiên bản/object ngoài hệ thống trong S3.
+- Danh sách có tìm kiếm tên/chủ sở hữu/định dạng, hiển thị 50 dòng mỗi lượt Xem thêm; tỷ trọng file tính theo tổng dung lượng trong cùng phạm vi.
+- Không cần migration database mới.

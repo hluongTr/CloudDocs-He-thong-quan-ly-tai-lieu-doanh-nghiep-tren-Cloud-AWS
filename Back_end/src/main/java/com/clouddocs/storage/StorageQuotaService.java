@@ -99,6 +99,21 @@ public class StorageQuotaService {
                 Map.copyOf(byType), scope.size(), missing, zero, confirmedBytes, used - confirmedBytes, unconfirmed, Map.copyOf(confirmedByType));
     }
 
+    public Usage systemUsageFor(List<Document> stored,List<User> accounts){
+        // A synthetic scope counts every document once, including trash and pending allocations.
+        long used=0,confirmedBytes=0;int missing=0,zero=0,pending=0,count=0;
+        Map<String,Long> byType=new TreeMap<>(),confirmedTypes=new TreeMap<>();
+        List<Long> ids=stored.stream().filter(d->!d.isPurged()).map(Document::getId).filter(Objects::nonNull).toList();
+        Set<Long> confirmed=ids.isEmpty()?Set.of():new HashSet<>(documents.findUploadConfirmedIds(ids));
+        for(Document d:stored){if(d.isPurged())continue;count++;boolean uploaded=confirmed.contains(d.getId());if(!uploaded)pending++;
+            Long size=d.getFileSize();if(size==null||size<0){missing++;continue;}if(size==0)zero++;
+            used=Math.addExact(used,size);String type=d.getFileType()==null||d.getFileType().isBlank()?"OTHER":d.getFileType().trim().toUpperCase(Locale.ROOT);
+            byType.merge(type,size,Math::addExact);if(uploaded){confirmedBytes=Math.addExact(confirmedBytes,size);confirmedTypes.merge(type,size,Math::addExact);}
+        }
+        long limit=adminLimit;
+        return new Usage(used,limit,Math.max(0,limit-used),maxFileBytes,Map.copyOf(byType),count,missing,zero,confirmedBytes,used-confirmedBytes,pending,Map.copyOf(confirmedTypes));
+    }
+
     // Quota charges declared metadata, including unconfirmed allocations; never bucket capacity.
     public record Usage(long usedBytes, long limitBytes, long remainingBytes, long maxFileBytes,
             Map<String, Long> storageByType, int ownedDocuments, int missingSizeCount, int zeroSizeCount,

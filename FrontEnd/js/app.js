@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
 let currentSettings = { ...DEFAULT_SETTINGS };
 
 const pageNames = {
+  storage: ["Quản lý dung lượng", "LƯU TRỮ", "Theo dõi dung lượng và các tài liệu chiếm nhiều bộ nhớ."],
   tasks: ["Công việc", "CÔNG VIỆC", "Giao việc, nộp báo cáo và theo dõi hạn nộp."],
   trash: ["Thùng rác", "THÙNG RÁC", "Khôi phục hoặc xóa vĩnh viễn tài liệu đã xóa."],
   profile: ["Hồ sơ cá nhân", "TÀI KHOẢN", "Cập nhật thông tin cá nhân."],
@@ -600,6 +601,7 @@ function showAuth() {
   document.getElementById("userTable").replaceChildren();
   document.getElementById("documentTable").replaceChildren();
   storageQuota = null;
+  window.resetStorageManagement?.();
   document.getElementById("storageProgress").style.width = "0%";
   document.getElementById("storageUsage").textContent = "—";
   document.getElementById("storageDonut").style.background = "#dce1e9";
@@ -801,7 +803,7 @@ function renderStorageQuota(quota) {
   usage.textContent = used + " / " + formatStorageBytes(quota.limitBytes);
   usage.title = missing ? (en ? "Some files lack size metadata" : "Một số tài liệu chưa có thông tin kích thước") : "";
   document.getElementById("statStorage").textContent = used;
-  document.getElementById("storageQuotaNote").textContent = (en ? "Personal quota: " : "Hạn mức cá nhân: ") + formatStorageBytes(quota.limitBytes);
+  document.getElementById("storageQuotaNote").textContent = (currentUser?.role === "ADMIN" ? (en ? "System quota: " : "Hạn mức hệ thống: ") : (en ? "Personal quota: " : "Hạn mức cá nhân: ")) + formatStorageBytes(quota.limitBytes);
 }
 function renderStorageDistribution(data) {
   const en = currentSettings.language === "en";
@@ -845,6 +847,8 @@ function renderAdminStorage(data) {
   const rows = document.getElementById("adminStorageRows");
   rows.replaceChildren();
   if (!admin) return;
+  const systemLimit=data.storageQuota?.limitBytes || storageQuota?.limitBytes || 1000000000000;
+  if(Number.isFinite(data.systemStorageBytes)&&systemLimit>0)renderStorageQuota({usedBytes:data.systemStorageBytes,limitBytes:systemLimit,missingSizeCount:data.systemMissingSizeCount||0});
   const en = currentSettings.language === "en";
   document.getElementById("adminStorageTitle").textContent = en
     ? "Storage by account"
@@ -871,8 +875,7 @@ function renderAdminStorage(data) {
 }
 
 document.getElementById("manageStorage").addEventListener("click", async () => {
-  await showPage("dashboard");
-  document.querySelector(".storage-panel").scrollIntoView({ behavior: "smooth", block: "center" });
+  await showPage("storage");
 });
 
 function renderDashboardActivity(items) {
@@ -1416,6 +1419,10 @@ async function showPage(page) {
   // =========================
   // DOCUMENTS
   // =========================
+  else if (page === "storage") {
+    document.getElementById("storageManagementPage").classList.remove("hidden");
+    await window.loadStorageManagement();
+  }
   else if (page === "tasks") {
     document.getElementById("workTasksPage").classList.remove("hidden");
     await window.loadWorkTasks();

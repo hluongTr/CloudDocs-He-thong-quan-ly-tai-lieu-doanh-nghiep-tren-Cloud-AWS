@@ -133,3 +133,5 @@ test("pending uploads are included in allocated quota and metadata distribution"
   assert.equal(document.getElementById("donutStorage").textContent,"3 KB");
   assert.ok(document.getElementById("storageBreakdown").innerHTML.includes("ZIP"));
 });
+
+test('admin dashboard sidebar uses all accounts instead of the admin personal allocation',()=>{const {context,document}=screen();context.renderStorageQuota({usedBytes:12,limitBytes:10000});context.renderAdminStorage({isAdmin:true,systemStorageBytes:11012,systemMissingSizeCount:0,storageUsers:[{displayName:'Admin',role:'ADMIN',usedBytes:12,limitBytes:10000,remainingBytes:9988},{displayName:'User',role:'USER',usedBytes:11000,limitBytes:1000,remainingBytes:0}]});assert.equal(document.getElementById('storageUsage').textContent,'11.01 KB / 10 KB');assert.equal(document.getElementById('statStorage').textContent,'11.01 KB');});
