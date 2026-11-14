@@ -32,7 +32,7 @@ public class CognitoUsers {
             if (fillMissingProfile(user, jwt)) users.saveAndFlush(user);
         }
         String role = user.getRole() == null ? "" : user.getRole().toUpperCase(Locale.ROOT);
-        var authorities = "ACTIVE".equalsIgnoreCase(user.getStatus()) && List.of("ADMIN", "USER").contains(role)
+        var authorities = "ACTIVE".equalsIgnoreCase(user.getStatus()) && List.of("ADMIN", "MANAGER", "USER").contains(role)
                 ? List.of(new SimpleGrantedAuthority("ROLE_" + role))
                 : List.<SimpleGrantedAuthority>of();
         return new JwtAuthenticationToken(jwt, authorities, user.getUsername());

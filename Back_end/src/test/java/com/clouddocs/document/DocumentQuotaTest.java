@@ -38,7 +38,7 @@ class DocumentQuotaTest {
                     audit,
                     mock(AuditLogRepository.class),
                     quotas,
-                    mock(com.clouddocs.work.WorkTaskRepository.class), "bucket");
+                    mock(com.clouddocs.work.WorkTaskRepository.class), mock(com.clouddocs.department.DepartmentService.class), "bucket");
     private Document document;
 
     @BeforeEach
@@ -168,4 +168,12 @@ class DocumentQuotaTest {
         var values=captured.getAllValues();assertNotEquals(values.get(0).getS3Key(),values.get(1).getS3Key());
         assertTrue(values.get(0).getS3Key().length()<100);
     }
+
+    @Test void metadataReservationDoesNotDuplicateTheSuccessfulUploadAudit(){
+        when(documents.save(any(Document.class))).thenAnswer(call->{Document d=call.getArgument(0);ReflectionTestUtils.setField(d,"id",99L);ReflectionTestUtils.setField(d,"updatedAt",java.time.Instant.now());return d;});
+        service.create(new DocumentDtos.CreateDocumentRequest("file","","file.pdf","PDF",50L,"IT"),"editor");
+        verify(documents).save(any(Document.class));verifyNoInteractions(audit);
+    }
+
+ @Test void newlyCreatedFileTypeIsDetectedFromFilename(){when(documents.save(any(Document.class))).thenAnswer(call->{Document d=call.getArgument(0);ReflectionTestUtils.setField(d,"id",99L);ReflectionTestUtils.setField(d,"updatedAt",java.time.Instant.now());return d;});var result=service.create(new DocumentDtos.CreateDocumentRequest("Drawing","","drawing.dxf","PDF",50L,"IT"),"editor");assertEquals("DXF",result.fileType());}
 }

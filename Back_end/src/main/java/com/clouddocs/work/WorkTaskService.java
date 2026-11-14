@@ -32,9 +32,9 @@ public class WorkTaskService {
     @Transactional(readOnly=true)
     public Response detail(Long id,String username){User actor=actor(username);WorkTask task=get(id,false);requireVisible(task,actor);return response(task);}
     @Transactional(readOnly=true)
-    public List<Person> assignees(String username){User actor=actor(username);requireAdmin(actor);
+    public List<Person> assignees(String username){User actor=actor(username);requireAssignor(actor);
         return users.findCognitoUsers().stream()
-                .filter(u->"USER".equalsIgnoreCase(u.getRole()) && "ACTIVE".equalsIgnoreCase(u.getStatus()) && !Objects.equals(u.getId(),actor.getId())).map(this::person).toList();}
+                .filter(u->("USER".equalsIgnoreCase(u.getRole())||admin(actor)&&"MANAGER".equalsIgnoreCase(u.getRole())) && "ACTIVE".equalsIgnoreCase(u.getStatus()) && !Objects.equals(u.getId(),actor.getId()) && (admin(actor)||DepartmentScope.same(actor,u))).map(this::person).toList();}
     @Transactional(readOnly=true)
     public List<ReportDocument> reportDocuments(String username){User actor=actor(username);
         List<Document> owned=documents.findByOwnerId(actor.getId()).stream().filter(Document::isAvailable).toList();
@@ -42,11 +42,12 @@ public class WorkTaskService {
         Set<Long> confirmed=new HashSet<>(documents.findUploadConfirmedIds(owned.stream().map(Document::getId).toList()));
         return owned.stream().filter(d->confirmed.contains(d.getId())).map(this::report).toList();}
     public Response create(CreateRequest request,String username){
-        User actor=actor(username);requireAdmin(actor);
+        User actor=actor(username);requireAssignor(actor);
         if(request.dueAt()==null || !request.dueAt().isAfter(Instant.now()))throw new IllegalArgumentException("Hạn nộp phải ở tương lai");
         User assignee=users.findById(request.assigneeId()).orElseThrow(()->new IllegalArgumentException("Không tìm thấy người nhận việc"));
-        if(!"ACTIVE".equalsIgnoreCase(assignee.getStatus()) || !"USER".equalsIgnoreCase(assignee.getRole()) || Objects.equals(actor.getId(),assignee.getId()) || !identities.existsByUserId(assignee.getId()))
+        if(!"ACTIVE".equalsIgnoreCase(assignee.getStatus()) || !("USER".equalsIgnoreCase(assignee.getRole())||admin(actor)&&"MANAGER".equalsIgnoreCase(assignee.getRole())) || Objects.equals(actor.getId(),assignee.getId()) || !identities.existsByUserId(assignee.getId()))
             throw new IllegalArgumentException("Chọn một nhân viên USER đang hoạt động để giao việc");
+        if(DepartmentScope.manager(actor)&&!DepartmentScope.same(actor,assignee))throw new AccessDeniedException("Chỉ được giao việc cho nhân viên trong phòng ban của mình");
         WorkTask task=new WorkTask();task.title=request.title().trim();task.description=request.description().trim();
         task.assignedBy=actor;task.assignee=assignee;task.dueAt=request.dueAt();
         task=tasks.saveAndFlush(task);
@@ -76,7 +77,7 @@ public class WorkTaskService {
         event(task,actor,task.assignedBy,"TASK_SUBMITTED","đã nộp báo cáo cho công việc",document.getId());return response(task);
     }
     public Response review(Long id,ReviewRequest request,boolean approve,String username){
-        User actor=actor(username);requireAdmin(actor);WorkTask task=get(id,true);
+        User actor=actor(username);requireAssignor(actor);WorkTask task=get(id,true);
         if(!Objects.equals(task.assignedBy.getId(),actor.getId()))throw new AccessDeniedException("Chỉ người giao việc được duyệt hoặc yêu cầu sửa báo cáo");
         checkVersion(task,request.version());requireStatus(task,"SUBMITTED");
         String feedback=clean(request.feedback());
@@ -88,7 +89,7 @@ public class WorkTaskService {
         return response(task);
     }
     public void delete(Long id,Long version,String username){
-        User actor=actor(username);requireAdmin(actor);WorkTask task=get(id,true);
+        User actor=actor(username);requireAssignor(actor);WorkTask task=get(id,true);
         if(!Objects.equals(task.assignedBy.getId(),actor.getId()))throw new AccessDeniedException("Chỉ người giao việc được xóa công việc");
         checkVersion(task,version);
         audit.logInTransaction(username,"TASK_DELETED",task.reportDocument==null?null:task.reportDocument.getId(),task.assignee.getId(),
@@ -100,7 +101,7 @@ public class WorkTaskService {
     private User actor(String username){User user=users.findByUsernameIgnoreCase(username).orElseThrow(()->new AccessDeniedException("Không tìm thấy tài khoản"));
         if(!"ACTIVE".equalsIgnoreCase(user.getStatus()))throw new AccessDeniedException("Tài khoản không hoạt động");return user;}
     private boolean admin(User user){return "ADMIN".equalsIgnoreCase(user.getRole());}
-    private void requireAdmin(User user){if(!admin(user))throw new AccessDeniedException("Chỉ ADMIN được giao việc và duyệt báo cáo");}
+    private void requireAssignor(User user){if(admin(user)||DepartmentScope.manager(user)&&DepartmentScope.assigned(user))return;throw new AccessDeniedException("Chỉ admin hoặc trưởng phòng đã được gán phòng ban mới được giao việc và duyệt báo cáo");}
     private void requireVisible(WorkTask task,User user){if(!admin(user)&&!Objects.equals(task.assignee.getId(),user.getId())&&!Objects.equals(task.assignedBy.getId(),user.getId()))throw new AccessDeniedException("Bạn không có quyền xem công việc này");}
     private void requireAssignee(WorkTask task,User user){if(!Objects.equals(task.assignee.getId(),user.getId()))throw new AccessDeniedException("Chỉ người được giao việc được cập nhật và nộp báo cáo");}
     private void checkVersion(WorkTask task,Long version){if(version==null || !Objects.equals(version,task.version))throw new IllegalStateException("Công việc đã thay đổi. Hãy mở lại trước khi thực hiện thao tác");}

@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = {
 let currentSettings = { ...DEFAULT_SETTINGS };
 
 const pageNames = {
+  sent: ["Đã chia sẻ", "CHIA SẺ", "Kiểm soát quyền chia sẻ tài liệu."],
+  departments: ["Phòng ban", "QUẢN TRỊ", "Quản lý danh sách phòng ban và quyền tự chọn."],
   storage: ["Quản lý dung lượng", "LƯU TRỮ", "Theo dõi dung lượng và các tài liệu chiếm nhiều bộ nhớ."],
   tasks: ["Công việc", "CÔNG VIỆC", "Giao việc, nộp báo cáo và theo dõi hạn nộp."],
   trash: ["Thùng rác", "THÙNG RÁC", "Khôi phục hoặc xóa vĩnh viễn tài liệu đã xóa."],
@@ -394,7 +396,7 @@ function applyLanguage() {
   });
   if (currentUser)
     document.getElementById("sidebarUserRole").textContent =
-      currentUser.role === "ADMIN" ? text.admin : text.user;
+      roleName(currentUser.role);
   document.getElementById("pageTitle").textContent =
     text.pages[activePage] || pageNames[activePage]?.[0] || "CloudDocs";
   if (["shared", "recent", "favorites"].includes(activePage)) {
@@ -475,11 +477,15 @@ function formatUpdated(value) {
     timeStyle: "short",
   });
 }
+function documentFileType(filename,fallback){const name=String(filename||''),dot=name.lastIndexOf('.');return dot>=0&&dot<name.length-1?name.slice(dot+1).toUpperCase():String(fallback||'FILE').toUpperCase();}
+function libraryDocument(d){return typeof d.inLibrary==='boolean'?d.inLibrary:['ADMIN','OWNER'].includes(d.access);}
+function renderDocumentTypes(){const select=document.getElementById('typeFilter');if(!select)return;const previous=select.value;const types=[...new Set(docs.filter(libraryDocument).map(d=>d.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));select.innerHTML='<option value="">Tất cả loại</option>'+types.map(type=>'<option value="'+escapeHtml(type)+'">'+escapeHtml(type)+'</option>').join('');select.value=types.includes(previous)?previous:'';}
 function normalize(d) {
   return {
     id: d.id,
     name: d.title || d.fileName || (currentSettings.language === "en" ? "Untitled" : "Không tên"),
-    type: (d.fileType || "FILE").toUpperCase(),
+    type: documentFileType(d.fileName,d.fileType),
+    inLibrary:typeof d.inLibrary === "boolean" ? d.inLibrary : ["OWNER","ADMIN"].includes(String(d.access||"").toUpperCase()),
     owner: d.owner || "—",
     dept: d.department || "—",
     updated: d.updatedAt,
@@ -544,7 +550,7 @@ function row(d, full = false, selectable = full) {
     );
   if (!actions.length) actions.push(`<span class="row-dash">—</span>`);
   return `<tr data-id="${d.id}">
-    ${selectable ? `<td><input type="checkbox" class="document-select" aria-label="Chọn tài liệu ${escapeHtml(d.name)}" data-document-id="${d.id}" ${selectedDocumentIds.has(Number(d.id)) ? "checked" : ""} onchange="selectDocument(${d.id},this.checked)"></td>` : ""}
+    ${selectable ? `<td><input type="checkbox" class="document-select" ${!canDelete?'disabled title="Không có quyền xóa tài liệu này"':''} aria-label="Chọn tài liệu ${escapeHtml(d.name)}" data-document-id="${d.id}" ${selectedDocumentIds.has(Number(d.id)) ? "checked" : ""} onchange="selectDocument(${d.id},this.checked)"></td>` : ""}
     <td><div class="file-cell">${fileIcon(d.type)}<span data-no-translate>${escapeHtml(d.name)}</span></div></td>
     <td>${ownerCell(d)}</td><td data-no-translate>${escapeHtml(d.dept)}</td><td>${escapeHtml(formatUpdated(d.updated))}</td><td>${escapeHtml(d.size)}</td>
     ${full ? `<td><span class="status ${escapeHtml(d.status)}">${status}</span></td>` : ""}
@@ -560,7 +566,7 @@ function setToken(token) { if (!token) CognitoAuth.clear(); }
 
 async function api(path, options = {}) {
   const token = getToken();
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  const headers = { ...(typeof FormData !== "undefined" && options.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const text = await response.text();
@@ -582,6 +588,12 @@ async function api(path, options = {}) {
 }
 
 function showAuth() {
+  window.resetProfileExtras?.();
+  editSequence++;editSaving=false;
+  for(const id of ["saveEdit","cancelEdit","closeEdit","editReplacementFile","clearEditReplacement"])document.getElementById(id).disabled=false;
+  document.getElementById("editReplacementFile").value="";
+  document.getElementById("editReplacementName").textContent="";
+  window.resetSentShares?.();
   window.resetWorkTasks?.();
   window.closePreviewModal?.();
   for (const id of ["uploadModal", "shareModal", "editModal", "notificationModal", "notificationDetailModal"]) document.getElementById(id).classList.add("hidden");
@@ -636,6 +648,7 @@ function profileName(user) {
 function contactEmail(user) {
   return user?.email && !user.email.toLowerCase().endsWith("@identity.invalid") ? user.email : "";
 }
+function roleName(role){return role==='MANAGER'?(currentSettings.language==='en'?'Department manager':'Trưởng phòng'):role==='ADMIN'?(currentSettings.language==='en'?'Administrator':'Quản trị viên'):(currentSettings.language==='en'?'Employee':'Nhân viên');}
 function updateUserUI() {
   if (!currentUser) return;
   document.getElementById("displayNameForm").classList.toggle("hidden", profileName(currentUser) !== "Chưa cập nhật");
@@ -646,9 +659,11 @@ function updateUserUI() {
   document.getElementById("sidebarUserName").textContent = profileName(currentUser);
   const locale = languageText[currentSettings.language] || languageText.vi;
   document.getElementById("sidebarUserRole").textContent =
-    currentUser.role === "ADMIN" ? locale.admin : locale.user;
+    roleName(currentUser.role);
   document.getElementById("topAvatar").textContent = (profileName(currentUser) === "Chưa cập nhật" ? "CD" : initials(profileName(currentUser)));
   document.querySelector(".user-mini > .avatar").textContent = (profileName(currentUser) === "Chưa cập nhật" ? "CD" : initials(profileName(currentUser)));
+  window.paintOwnAvatar?.();
+  document.getElementById("departmentsNav")?.classList.toggle("hidden",currentUser.role!=="ADMIN");
   document.getElementById("profileNav").classList.remove("hidden");
   document.getElementById("topAvatar").disabled = false;
   document.getElementById("topAvatar").setAttribute("aria-label", "Mở hồ sơ cá nhân");
@@ -756,7 +771,7 @@ async function loadDashboard() {
     renderStorageDistribution(data.storageDistribution);
 
 
-    renderDashboardActivity(Array.isArray(data.recentDocuments) ? data.recentDocuments : []);
+    renderDashboardActivity(Array.isArray(data.recentActivity) ? data.recentActivity : []);
 
   } catch (error) {
     console.error(error);
@@ -879,25 +894,8 @@ document.getElementById("manageStorage").addEventListener("click", async () => {
 });
 
 function renderDashboardActivity(items) {
-  const box = document.getElementById("dashboardActivity");
-  if (!box) return;
-  if (!items.length) {
-    box.innerHTML = '<div class="dashboard-loading">Chưa có tài liệu.</div>';
-    return;
-  }
-  box.innerHTML = items
-    .map((d) => {
-      const owner = escapeHtml(d.owner || "—");
-      const title = escapeHtml(d.title || "Không tên");
-      const dept = escapeHtml(d.department || "—");
-      const type = escapeHtml((d.fileType || "FILE").toUpperCase());
-      return `<div class="activity-row">
-      <div class="activity-avatar blue-bg">${initials(d.owner || "CloudDocs")}</div>
-      <div><strong data-no-translate>${owner}</strong> ${currentSettings.language === "en" ? "updated" : "cập nhật"} <b data-no-translate>${title}</b><small><span data-no-translate>${dept}</span> · ${escapeHtml(formatUpdated(d.updatedAt))}</small></div>
-      <span class="file-type ${type.toLowerCase()}">${type}</span>
-    </div>`;
-    })
-    .join("");
+ const box=document.getElementById('dashboardActivity');if(!box)return;
+ box.innerHTML=items.length?items.map(log=>'<div class="activity-row"><div class="activity-avatar blue-bg">'+escapeHtml(initials(log.fullName||'CloudDocs'))+'</div><div><strong data-no-translate>'+escapeHtml(log.fullName||'Hệ thống')+'</strong> · '+escapeHtml(activityAction(log.action))+(log.documentName?' · <b data-no-translate>'+escapeHtml(log.documentName)+'</b>':'')+'<small data-no-translate>'+activityDetails(log)+' · '+escapeHtml(formatUpdated(log.createdAt))+'</small></div></div>').join(''):'<div class="dashboard-loading">Chưa có hoạt động.</div>';
 }
 
 function renderStorageBreakdown(byType) {
@@ -925,41 +923,10 @@ function renderStorageBreakdown(byType) {
 }
 
 async function loadDepartments() {
-  const filter = document.getElementById("departmentFilter");
-  if (!filter || !getToken()) return;
-  const selected = filter.value;
-  try {
-    const data = await api("/departments");
-    const departments = Array.isArray(data)
-      ? data.filter((value) => typeof value === "string" && value.trim())
-      : [];
-    filter.innerHTML =
-      `<option value="">Tất cả phòng ban</option>` +
-      departments
-        .map((value) => {
-          const safe = escapeHtml(value.trim());
-          return `<option value="${safe}" data-no-translate>${safe}</option>`;
-        })
-        .join("");
-    if (departments.some((value) => value === selected)) filter.value = selected;
-
-    for (const id of ["uploadDepartment", "editDepartment"]) {
-      const select = document.getElementById(id);
-      if (!select) continue;
-      const previous = select.value;
-      select.innerHTML = departments
-        .map((value) => {
-          const safe = escapeHtml(value.trim());
-          return `<option value="${safe}" data-no-translate>${safe}</option>`;
-        })
-        .join("");
-      const preferred = departments.includes(previous) ? previous : currentUser?.department;
-      if (preferred && departments.includes(preferred)) select.value = preferred;
-    }
-  } catch (error) {
-    console.error(error);
-    filter.innerHTML = `<option value="">Tất cả phòng ban</option>`;
-  }
+ const filter=document.getElementById('departmentFilter');if(!filter||!getToken())return;const token=getToken(),selected=filter.value;
+ try{const departments=await api('/departments');requireSession(token);filter.innerHTML='<option value="">Tất cả phòng ban</option>'+departments.filter(name=>name!=='Chưa cập nhật').map(name=>'<option value="'+escapeHtml(name)+'" data-no-translate>'+escapeHtml(name)+'</option>').join('');if(departments.includes(selected)&&selected!=='Chưa cập nhật')filter.value=selected;
+ if(window.fetchDepartmentCatalog){await window.fetchDepartmentCatalog();requireSession(token);window.fillDocumentDepartments();}
+ }catch(error){if(token===getToken())filter.innerHTML='<option value="">Tất cả phòng ban</option>';}
 }
 
 async function loadDocuments() {
@@ -1067,7 +1034,7 @@ async function loadCollection(page) {
 // =========================
 
 const activityLabels = {
-  TASK_DELETED:"Xóa công việc", TASK_ASSIGNED:"Giao việc", TASK_STARTED: "Bắt đầu công việc", TASK_SUBMITTED: "Nộp báo cáo", TASK_APPROVED: "Duyệt hoàn thành", TASK_CHANGES_REQUESTED: "Yêu cầu sửa báo cáo",
+  REPLACE_FILE:"Ghi đè tệp", FAVORITE_ADD:"Thêm vào yêu thích", FAVORITE_REMOVE:"Bỏ yêu thích", UPDATE_AVATAR:"Cập nhật ảnh đại diện", DELETE_AVATAR:"Xóa ảnh đại diện", CREATE_DEPARTMENT:"Thêm phòng ban", DELETE_DEPARTMENT:"Xóa phòng ban", UPDATE_DEPARTMENT:"Cập nhật phòng ban", ASSIGN_DEPARTMENT:"Gán phòng ban", TASK_DELETED:"Xóa công việc", TASK_ASSIGNED:"Giao việc", TASK_STARTED: "Bắt đầu công việc", TASK_SUBMITTED: "Nộp báo cáo", TASK_APPROVED: "Duyệt hoàn thành", TASK_CHANGES_REQUESTED: "Yêu cầu sửa báo cáo",
   RESTORE: "Khôi phục tài liệu", PURGE: "Xóa vĩnh viễn", DELETE_NOTIFICATION: "Xóa thông báo",
   LOGIN: "Đăng nhập",
   LOGOUT: "Đăng xuất",
@@ -1082,7 +1049,7 @@ const activityLabels = {
   SEND_NOTIFICATION: "Gửi thông báo",
 };
 const activityLabelsEn = {
-  TASK_DELETED:"Delete task", TASK_ASSIGNED:"Assign task", TASK_STARTED: "Start task", TASK_SUBMITTED: "Submit report", TASK_APPROVED: "Approve task", TASK_CHANGES_REQUESTED: "Request changes",
+  REPLACE_FILE:"Replace file", FAVORITE_ADD:"Add to favorites", FAVORITE_REMOVE:"Remove from favorites", UPDATE_AVATAR:"Update avatar", DELETE_AVATAR:"Delete avatar", CREATE_DEPARTMENT:"Create department", DELETE_DEPARTMENT:"Delete department", UPDATE_DEPARTMENT:"Update department", ASSIGN_DEPARTMENT:"Assign department", TASK_DELETED:"Delete task", TASK_ASSIGNED:"Assign task", TASK_STARTED: "Start task", TASK_SUBMITTED: "Submit report", TASK_APPROVED: "Approve task", TASK_CHANGES_REQUESTED: "Request changes",
   RESTORE: "Restore document", PURGE: "Delete permanently", DELETE_NOTIFICATION: "Delete announcement",
   LOGIN: "Sign in",
   LOGOUT: "Sign out",
@@ -1152,6 +1119,9 @@ function activityDetails(log) {
       LOGOUT: `${actor} signed out`,
       CREATE_DOCUMENT: `${actor} created ${documentName}`,
       UPLOAD: `${actor} uploaded ${documentName}`,
+      REPLACE_FILE: `${actor} replaced the file for ${documentName}`,
+      FAVORITE_ADD: `${actor} added ${documentName} to favorites`,
+      FAVORITE_REMOVE: `${actor} removed ${documentName} from favorites`,
       VIEW: `${actor} viewed ${documentName}`,
       DOWNLOAD: `${actor} downloaded ${documentName}`,
       EDIT: `${actor} edited ${documentName}`,
@@ -1333,6 +1303,7 @@ function renderActivityLogs(logs) {
 }
 
 async function loadActivityLogs() {
+  const token=getToken();
   const box = document.getElementById("activityContent");
 
   if (!box) return;
@@ -1346,10 +1317,11 @@ async function loadActivityLogs() {
   `;
 
   try {
-    const data = await api("/audit-logs");
+    const data = await api("/audit-logs");requireSession(token);
 
     renderActivityLogs(Array.isArray(data) ? data : []);
   } catch (error) {
+    if(token!==getToken())return;
     console.error("Activity Log error:", error);
 
     box.innerHTML = `
@@ -1375,6 +1347,7 @@ async function loadActivityLogs() {
   }
 }
 function renderTables() {
+  renderDocumentTypes();
   const recent = document.getElementById("recentTable"),
     table = document.getElementById("documentTable");
   if (recent)
@@ -1387,10 +1360,15 @@ function renderTables() {
   filterDocs();
 }
 
+
+async function refreshDocumentPage(button){if(button.disabled)return;const token=getToken(),page=activePage;button.disabled=true;try{if(page==='documents')await loadDocuments();else if(['shared','recent','favorites'].includes(page))await loadCollection(page);requireSession(token);}catch(error){if(token===getToken())showToast(error.message);}finally{button.disabled=false;}}
+document.getElementById('refreshDocuments').addEventListener('click',event=>refreshDocumentPage(event.currentTarget));
+document.getElementById('refreshCollection').addEventListener('click',event=>refreshDocumentPage(event.currentTarget));
+
 const pages = document.querySelectorAll(".page");
 async function showPage(page) {
 
-  if (page === "users" && currentUser?.role !== "ADMIN") {
+  if (["users","departments"].includes(page) && currentUser?.role !== "ADMIN") {
     showToast("Bạn không có quyền quản trị người dùng.");
     return;
   }
@@ -1422,6 +1400,14 @@ async function showPage(page) {
   else if (page === "storage") {
     document.getElementById("storageManagementPage").classList.remove("hidden");
     await window.loadStorageManagement();
+  }
+  else if (page === "departments") {
+    document.getElementById("departmentsPage").classList.remove("hidden");
+    await window.loadDepartmentManagement();
+  }
+  else if (page === "sent") {
+    document.getElementById("sentSharesPage").classList.remove("hidden");
+    await window.loadSentShares();
   }
   else if (page === "tasks") {
     document.getElementById("workTasksPage").classList.remove("hidden");
@@ -1518,6 +1504,7 @@ function renderProfile() {
   document.getElementById("profileStatus").textContent =
     currentUser.status === "ACTIVE" ? "Đang hoạt động" : "Đã khóa";
   setProfileMessage("profileMessage", "");
+  window.loadProfileExtras?.();
 }
 
 document.getElementById("topAvatar").addEventListener("click", () => {
@@ -1593,19 +1580,19 @@ async function loadUsers() {
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px">Đang tải...</td></tr>`;
   try {
-    const users = await api("/users");
+    const [users] = await Promise.all([api("/users"),window.fetchDepartmentCatalog?.()]);
     if (sessionToken !== getToken()) return;
     tbody.innerHTML =
       users
         .map(
           (u) => `<tr>
       <td>${ownerCell({ owner: profileName(u) })}<small style="display:block;color:#8b95a7;margin-left:40px">ID: ${escapeHtml(u.id)}</small></td>
-      <td>${escapeHtml(contactEmail(u) || "Chưa cập nhật")}</td><td>${escapeHtml(u.department)}</td>
+      <td>${escapeHtml(contactEmail(u) || "Chưa cập nhật")}</td><td>${window.departmentAssignmentCell?window.departmentAssignmentCell(u):escapeHtml(u.department)}</td>
       <td><span class="role-badge ${u.role.toLowerCase()}">${u.role}</span></td>
       <td><span class="status-badge ${u.status.toLowerCase()}">${u.status}</span></td>
       <td>${formatUpdated(u.createdAt)}</td>
       <td><div class="user-actions">
-        <select onchange="changeUserRole(${u.id},this.value)"><option value="USER" ${u.role === "USER" ? "selected" : ""}>USER</option><option value="ADMIN" ${u.role === "ADMIN" ? "selected" : ""}>ADMIN</option></select>
+        <select onchange="changeUserRole(${u.id},this.value)"><option value="USER" ${u.role === "USER" ? "selected" : ""}>USER</option><option value="MANAGER" ${u.role === "MANAGER" ? "selected" : ""}>Trưởng phòng</option><option value="ADMIN" ${u.role === "ADMIN" ? "selected" : ""}>ADMIN</option></select>
         <select onchange="changeUserStatus(${u.id},this.value)">${u.status === "PENDING_APPROVAL" ? '<option value="PENDING_APPROVAL" selected disabled>PENDING_APPROVAL</option>' : ""}<option value="ACTIVE" ${u.status === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option value="LOCKED" ${u.status === "LOCKED" ? "selected" : ""}>LOCKED</option></select>
         <button class="danger-btn" onclick="deleteUser(${u.id})" title="Xóa">Xóa</button>
       </div></td></tr>`,
@@ -1780,6 +1767,7 @@ document.getElementById("shareModal").addEventListener("click", (e) => {
 });
 
 let editDocumentId = null;
+let editSequence=0,editSaving=false;
 
 window.downloadDocument = async function (id) {
   let objectUrl = null;
@@ -1862,12 +1850,15 @@ window.deleteDocument = async function (id) {
 };
 
 window.openEditModal = function (id) {
+  if(editSaving)return;editSequence++;
+  clearEditReplacement();
   const doc = docs.find((x) => Number(x.id) === Number(id));
   if (!doc) return;
   editDocumentId = id;
   document.getElementById("editDocumentName").textContent = `${doc.name} · Document #${doc.id}`;
   document.getElementById("editTitle").value = doc.name || "";
   document.getElementById("editDescription").value = doc.description || "";
+  window.fillDocumentDepartments?.(doc.dept);
   const dept = document.getElementById("editDepartment");
   if ([...dept.options].some((o) => o.value === doc.dept)) dept.value = doc.dept;
   else {
@@ -1879,50 +1870,27 @@ window.openEditModal = function (id) {
   document.getElementById("editModal").classList.remove("hidden");
 };
 
-async function saveEditedDocument() {
-  if (!editDocumentId) return;
-  const title = document.getElementById("editTitle").value.trim();
-  const department = document.getElementById("editDepartment").value;
-  const description = document.getElementById("editDescription").value.trim();
-  const status = document.getElementById("editStatus").value;
-  if (!title) {
-    showToast("Tên tài liệu không được để trống.");
-    return;
-  }
-  const button = document.getElementById("saveEdit");
-  button.disabled = true;
-  button.textContent = "Đang lưu...";
-  try {
-    await api(`/documents/${editDocumentId}`, {
-      method: "PUT",
-      body: JSON.stringify({ title, description, department, status }),
-    });
-    showToast("Đã cập nhật tài liệu.");
-    document.getElementById("editModal").classList.add("hidden");
-    editDocumentId = null;
-    await loadDocuments();
-    await loadDashboard();
-    if (["shared", "recent", "favorites"].includes(activePage)) await loadCollection(activePage);
-  } catch (error) {
-    showToast(`Không thể chỉnh sửa: ${error.message}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = "Lưu thay đổi";
-  }
+function clearEditReplacement(){document.getElementById('editReplacementFile').value='';document.getElementById('editReplacementName').textContent='';document.getElementById('clearEditReplacement').classList.add('hidden');}
+function closeEditModal(){if(editSaving)return;editSequence++;editDocumentId=null;clearEditReplacement();document.getElementById('editModal').classList.add('hidden');}
+async function saveEditedDocument(){
+ if(!editDocumentId||editSaving)return;const button=document.getElementById('saveEdit');if(button.disabled)return;
+ const title=document.getElementById('editTitle').value.trim(),description=document.getElementById('editDescription').value.trim(),department=document.getElementById('editDepartment').value,status=document.getElementById('editStatus').value;
+ if(!title){showToast('Tên tài liệu không được để trống.');return;}if(!department){showToast('Hãy chọn phòng ban.');return;}
+ const file=document.getElementById('editReplacementFile').files?.[0];if(file&&file.size>100*1024*1024){showToast('Tệp thay thế tối đa 100 MB.');return;}
+ const id=editDocumentId,sequence=editSequence,token=getToken();editSaving=true;
+ const controls=['saveEdit','cancelEdit','closeEdit','editReplacementFile','clearEditReplacement'].map(id=>document.getElementById(id));controls.forEach(control=>control.disabled=true);button.textContent=file?'Đang tải tệp…':'Đang lưu…';
+ try{const metadata={title,description,department,status};if(file){const body=new FormData();body.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));body.append('file',file);await api('/documents/'+id+'/replacement',{method:'POST',body});}else await api('/documents/'+id,{method:'PUT',body:JSON.stringify(metadata)});
+ requireSession(token);if(sequence!==editSequence)return;
+ showToast(file?'Đã lưu thông tin và thay thế tệp.':'Đã cập nhật thông tin tài liệu.');document.getElementById('editModal').classList.add('hidden');editDocumentId=null;clearEditReplacement();
+ await loadDocuments();requireSession(token);await loadDashboard();requireSession(token);if(['shared','recent','favorites'].includes(activePage))await loadCollection(activePage);
+ }catch(error){if(token===getToken()&&sequence===editSequence)showToast('Không thể chỉnh sửa: '+error.message);}
+ finally{if(sequence===editSequence){editSaving=false;controls.forEach(control=>control.disabled=false);button.textContent='Lưu thay đổi';}}
 }
-
-document.getElementById("closeEdit").onclick = () => {
-  editDocumentId = null;
-  document.getElementById("editModal").classList.add("hidden");
-};
-document.getElementById("cancelEdit").onclick = () => {
-  editDocumentId = null;
-  document.getElementById("editModal").classList.add("hidden");
-};
-document.getElementById("saveEdit").onclick = saveEditedDocument;
-document.getElementById("editModal").addEventListener("click", (e) => {
-  if (e.target.id === "editModal") e.currentTarget.classList.add("hidden");
-});
+document.getElementById('editReplacementFile').addEventListener('change',event=>{const file=event.target.files?.[0];if(!file){clearEditReplacement();return;}if(file.size>100*1024*1024){clearEditReplacement();showToast('Tệp thay thế tối đa 100 MB.');return;}document.getElementById('editReplacementName').textContent=file.name+' · '+formatSize(file.size);document.getElementById('clearEditReplacement').classList.remove('hidden');});
+document.getElementById('clearEditReplacement').addEventListener('click',()=>{if(!editSaving)clearEditReplacement();});
+document.getElementById('closeEdit').onclick=closeEditModal;document.getElementById('cancelEdit').onclick=closeEditModal;
+document.getElementById('saveEdit').onclick=saveEditedDocument;
+document.getElementById('editModal').addEventListener('click',event=>{if(event.target.id==='editModal')closeEditModal();});
 
 const modal = document.getElementById("uploadModal");
 const openUpload = () => modal.classList.remove("hidden");
@@ -2042,7 +2010,7 @@ function filterDocs() {
   const q = (search.value || "").toLowerCase(),
     type = typeFilter.value,
     department = departmentFilter?.value || "";
-  const filtered = docs.filter(
+  const filtered = docs.filter(libraryDocument).filter(
     (d) =>
       (!q || `${d.name} ${d.owner} ${d.dept}`.toLowerCase().includes(q)) &&
       (!type || d.type === type) &&
@@ -2058,19 +2026,13 @@ function filterDocs() {
 search.addEventListener("input", () => { selectedDocumentIds.clear(); filterDocs(); updateBulkToolbar(); });
 typeFilter.addEventListener("change", () => { selectedDocumentIds.clear(); filterDocs(); updateBulkToolbar(); });
 if (departmentFilter) departmentFilter.addEventListener("change", () => { selectedDocumentIds.clear(); filterDocs(); updateBulkToolbar(); });
-document.getElementById("globalSearch").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    showPage("documents");
-    search.value = e.target.value;
-    filterDocs();
-  }
-});
-document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-    e.preventDefault();
-    document.getElementById("globalSearch").focus();
-  }
-});
+let globalSearchSequence=0;
+async function submitGlobalSearch(event){event.preventDefault();const query=document.getElementById('globalSearch').value.trim(),token=getToken(),sequence=++globalSearchSequence;if(!currentUser)return;
+ document.getElementById('globalSearch').blur?.();
+ try{await showPage('documents');requireSession(token);if(sequence!==globalSearchSequence||activePage!=='documents')return;search.value=query;selectedDocumentIds.clear();filterDocs();updateBulkToolbar();}catch(error){if(token===getToken()&&sequence===globalSearchSequence)showToast(error.message);}
+}
+document.getElementById('globalSearchForm').addEventListener('submit',submitGlobalSearch);
+
 document.getElementById("mobileMenu").onclick = () =>
   document.querySelector(".sidebar").classList.toggle("open");
 document.querySelector(".dropzone").addEventListener("dragover", (e) => {
@@ -2444,13 +2406,14 @@ function updateBulkToolbar() {
   const manage = selected.length > 0 && selected.every(d => ["OWNER", "ADMIN"].includes(d.access));
   for (const id of ["bulkDelete", "bulkShare"]) document.getElementById(id).disabled = bulkBusy || !manage;
   document.getElementById("bulkDownload").disabled = bulkBusy || !selected.length || !selected.every(d => ["OWNER", "ADMIN", "EDIT", "DOWNLOAD"].includes(d.access));
-  const visible = [...document.querySelectorAll("#documentTable .document-select")];
+  const visible = [...document.querySelectorAll("#documentTable .document-select")].filter(input=>!input.disabled);
   const all = document.getElementById("selectAllDocuments");
   all.checked = visible.length > 0 && visible.every(input => selectedDocumentIds.has(Number(input.dataset.documentId)));
   all.indeterminate = !all.checked && visible.some(input => selectedDocumentIds.has(Number(input.dataset.documentId)));
 }
 window.selectAllDocuments = function(checked) {
   document.querySelectorAll("#documentTable .document-select").forEach(input => {
+    if(input.disabled)return;
     input.checked = checked; const id = Number(input.dataset.documentId);
     checked ? selectedDocumentIds.add(id) : selectedDocumentIds.delete(id);
   });

@@ -34,7 +34,11 @@ public final class DocumentDtos {
             String department,
             String status,
             String updatedAt,
-            String access) {}
+            String access,boolean inLibrary) {
+        public DocumentResponse(Long id,String title,String description,String fileName,String fileType,Long fileSize,String owner,String department,String status,String updatedAt,String access){
+            this(id,title,description,fileName,fileType,fileSize,owner,department,status,updatedAt,access,"OWNER".equals(access)||"ADMIN".equals(access));
+        }
+    }
 
     public record PresignedUploadResponse(
             Long documentId, String key, String uploadUrl, long expiresInSeconds) {}

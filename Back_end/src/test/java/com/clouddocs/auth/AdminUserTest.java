@@ -50,4 +50,8 @@ class AdminUserTest {
         assertThrows(IllegalStateException.class,()->guarded.delete(1L,new UsernamePasswordAuthenticationToken("another",null)));
         assertEquals("ACTIVE",target.getStatus());verify(users,never()).save(any());
     }
+
+ @Test void managerRoleRequiresAnAssignedDepartment(){User u=admin();u.setRole("USER");u.setDepartment("Chưa cập nhật");var actor=new UsernamePasswordAuthenticationToken("another",null);assertThrows(IllegalStateException.class,()->controller.updateRole(1L,new AdminUserController.RoleRequest("MANAGER"),actor));u.setDepartment("IT");when(users.save(u)).thenReturn(u);assertEquals("MANAGER",controller.updateRole(1L,new AdminUserController.RoleRequest("MANAGER"),actor).role());}
+ @Test void lastAdminCannotBeDemotedThroughManagerRole(){User u=admin();u.setDepartment("IT");when(users.countActiveCognitoAdmins()).thenReturn(1L);assertThrows(IllegalStateException.class,()->controller.updateRole(1L,new AdminUserController.RoleRequest("MANAGER"),new UsernamePasswordAuthenticationToken("another",null)));}
+
 }

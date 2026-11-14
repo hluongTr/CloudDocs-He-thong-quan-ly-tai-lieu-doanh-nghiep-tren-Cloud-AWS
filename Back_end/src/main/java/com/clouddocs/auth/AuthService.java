@@ -12,10 +12,12 @@ import java.util.Locale;
 @Service
 public class AuthService {
 
+    private final com.clouddocs.department.DepartmentService departments;
     private final UserRepository users;
     private final AuditLogService auditLogService;
-    public AuthService(UserRepository users, AuditLogService auditLogService) {
+    public AuthService(UserRepository users, AuditLogService auditLogService, com.clouddocs.department.DepartmentService departments) {
         this.users = users;
+        this.departments=departments;
         this.auditLogService = auditLogService;
     }
 
@@ -69,7 +71,7 @@ public class AuthService {
                         });
         user.setFullName(request.fullName().trim());
         user.setEmail(email);
-        user.setDepartment(request.department().trim());
+        user.setDepartment(departments.profileName(user,request.department()));
         try {
             users.saveAndFlush(user);
         } catch (DataIntegrityViolationException ex) {
@@ -88,6 +90,6 @@ public class AuthService {
                 ProfilePresentation.name(u),
                 u.getDepartment(),
                 u.getRole(),
-                u.getStatus());
+                u.getStatus(),u.getAvatarUpdatedAt());
     }
 }

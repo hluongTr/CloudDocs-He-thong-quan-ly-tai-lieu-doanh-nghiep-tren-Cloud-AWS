@@ -40,16 +40,17 @@ public class AdminUserController {
         users.lockAdmins();
         User user = get(id);
         String role = request.role().toUpperCase();
-        if (!role.equals("USER") && !role.equals("ADMIN")) {
-            throw new IllegalArgumentException("Role chỉ có USER hoặc ADMIN");
+        if (!List.of("USER","MANAGER","ADMIN").contains(role)) {
+            throw new IllegalArgumentException("Role chỉ có USER, MANAGER hoặc ADMIN");
         }
         if (user.getUsername().equalsIgnoreCase(authentication.getName())
                 && !role.equals("ADMIN")) {
             throw new IllegalStateException("Không thể tự hạ quyền tài khoản ADMIN đang đăng nhập");
         }
-        if (user.getRole().equalsIgnoreCase("ADMIN") && role.equals("USER") && "ACTIVE".equalsIgnoreCase(user.getStatus()) && countActiveAdmins() <= 1) {
+        if (user.getRole().equalsIgnoreCase("ADMIN") && !role.equals("ADMIN") && "ACTIVE".equalsIgnoreCase(user.getStatus()) && countActiveAdmins() <= 1) {
             throw new IllegalStateException("Hệ thống phải có ít nhất một ADMIN");
         }
+        if(role.equals("MANAGER")&&!DepartmentScope.assigned(user))throw new IllegalStateException("Cần gán phòng ban trước khi đặt quyền Trưởng phòng");
         user.setRole(role);
         return toResponse(users.save(user));
     }
@@ -122,7 +123,7 @@ public class AdminUserController {
                 u.getCreatedAt());
     }
 
-    public record RoleRequest(@NotBlank @Pattern(regexp = "(?i)USER|ADMIN") String role) {}
+    public record RoleRequest(@NotBlank @Pattern(regexp = "(?i)USER|MANAGER|ADMIN") String role) {}
 
     public record StatusRequest(@NotBlank @Pattern(regexp = "(?i)ACTIVE|LOCKED") String status) {}
 }

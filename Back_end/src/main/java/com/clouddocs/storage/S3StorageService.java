@@ -33,6 +33,10 @@ public class S3StorageService {
         this.expirySeconds = expirySeconds;
     }
 
+    public void uploadReplacement(String bucket,String key,java.io.InputStream input,long size){
+        s3Client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType("application/octet-stream").contentLength(size).build(),software.amazon.awssdk.core.sync.RequestBody.fromInputStream(input,size));
+    }
+
     public PresignedResult createUploadUrl(
             String bucket, String key, String contentType, long contentLength) {
         // Sign the reserved size, but keep Content-Type unsigned as in the working upload flow.

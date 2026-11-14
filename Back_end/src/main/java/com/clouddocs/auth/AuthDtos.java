@@ -21,7 +21,9 @@ public final class AuthDtos {
             String fullName,
             String department,
             String role,
-            String status) {}
+            String status, java.time.Instant avatarUpdatedAt) {
+        public UserResponse(Long id,String username,String email,String fullName,String department,String role,String status){this(id,username,email,fullName,department,role,status,null);}
+    }
 
 
 

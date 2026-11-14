@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(
         name = "users",
         uniqueConstraints = {
@@ -41,6 +42,11 @@ public class User {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name="avatar_updated_at")
+    private Instant avatarUpdatedAt;
+    public Instant getAvatarUpdatedAt(){return avatarUpdatedAt;}
+    public void setAvatarUpdatedAt(Instant value){avatarUpdatedAt=value;}
 
     @PrePersist
     void onCreate() {

@@ -1,0 +1,5 @@
+package com.clouddocs.audit;
+import com.clouddocs.auth.User;import com.clouddocs.document.Document;import org.junit.jupiter.api.Test;import org.springframework.test.util.ReflectionTestUtils;import java.util.List;import static org.junit.jupiter.api.Assertions.*;
+class AuditUploadDedupTest {
+ @Test void onlyMetadataCreationWithMatchingActorAndSuccessfulUploadIsSuppressed(){User a=new User(),b=new User();ReflectionTestUtils.setField(a,"id",1L);ReflectionTestUtils.setField(b,"id",2L);Document doc=new Document();ReflectionTestUtils.setField(doc,"id",7L);AuditLog create=new AuditLog(),upload=new AuditLog(),other=new AuditLog();for(AuditLog l:List.of(create,upload,other))l.setDocument(doc);create.setUser(a);create.setAction("CREATE_DOCUMENT");upload.setUser(a);upload.setAction("UPLOAD");other.setUser(b);other.setAction("CREATE_DOCUMENT");assertEquals(List.of(upload,other),AuditLogService.visibleLogs(List.of(create,upload,other)));assertEquals(List.of(create),AuditLogService.visibleLogs(List.of(create)));}
+}

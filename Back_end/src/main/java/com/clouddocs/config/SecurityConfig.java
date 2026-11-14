@@ -50,8 +50,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/change-password").denyAll()
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/notifications").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/notifications/**").hasAnyRole("ADMIN", "USER")
-                        .anyRequest().hasAnyRole("ADMIN", "USER"))
+                        .requestMatchers(HttpMethod.DELETE, "/api/notifications/**").hasAnyRole("ADMIN", "MANAGER", "USER")
+                        .anyRequest().hasAnyRole("ADMIN", "MANAGER", "USER"))
                 .addFilterBefore(new ProvisioningErrorFilter(), BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwt -> {
                     try { return users.authenticate(jwt); }

@@ -138,4 +138,7 @@ class CognitoSecurityTest {
         var captor=org.mockito.ArgumentCaptor.forClass(User.class);verify(users).saveAndFlush(captor.capture());
         assertEquals("PENDING_APPROVAL",captor.getValue().getStatus());assertEquals("USER",captor.getValue().getRole());
     }
+
+ @Test void managerRoleComesFromDatabaseAndCannotAccessAdminEndpoints()throws Exception{user.setRole("MANAGER");mvc.perform(get("/api/auth/me").header("Authorization","Bearer "+valid())).andExpect(status().isOk());mvc.perform(get("/api/documents/test").header("Authorization","Bearer "+valid())).andExpect(status().isOk());mvc.perform(get("/api/users/test").header("Authorization","Bearer "+valid())).andExpect(status().isForbidden());mvc.perform(post("/api/notifications").header("Authorization","Bearer "+valid())).andExpect(status().isForbidden());}
+
 }

@@ -82,6 +82,12 @@ public class DocumentController {
         return service.update(id, request, authentication.getName());
     }
 
+    @PostMapping(value="/{id}/replacement",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DocumentResponse replaceFile(@PathVariable Long id,@RequestPart("file") MultipartFile file,
+            @Valid @RequestPart("metadata") UpdateDocumentRequest request,Authentication authentication){
+        return service.replaceFile(id,file,request,authentication.getName());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication) {
         service.delete(id, authentication.getName());

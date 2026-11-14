@@ -60,4 +60,10 @@ class DocumentControllerContractTest {
         mvc.perform(post("/api/documents/9/restore").principal(actor)).andExpect(status().isConflict())
             .andExpect(jsonPath("$.error").value("CONCURRENT_CHANGE"));
     }
+
+ @Test void replacementUsesMultipartMetadataAndAuthenticatedIdentity()throws Exception{
+  var file=new org.springframework.mock.web.MockMultipartFile("file","new.pdf","application/pdf",new byte[]{1,2});
+  var metadata=new org.springframework.mock.web.MockMultipartFile("metadata","metadata.json","application/json","{\"title\":\"Edited\",\"description\":\"\",\"department\":\"IT\",\"status\":\"ACTIVE\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  mvc.perform(multipart("/api/documents/9/replacement").file(file).file(metadata).principal(actor)).andExpect(status().isOk());verify(service).replaceFile(eq(9L),any(),argThat(r->r.title().equals("Edited")),eq("actor"));
+ }
 }

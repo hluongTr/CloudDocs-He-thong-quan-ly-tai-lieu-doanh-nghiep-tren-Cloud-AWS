@@ -314,3 +314,6 @@ button:disabled {
 /* Disabled report buttons are not pending network requests. */
 #workTaskDetailContent .primary-btn:disabled:not([aria-busy="true"])::after, #workTaskCreateModal .primary-btn:disabled::after {display:none;}
 #workTaskDetailContent .primary-btn[aria-busy="true"]::after {display:inline-block;}
+
+/* No image selected is a disabled action, not a network request. */
+#saveAvatar:disabled::after {display:none;}

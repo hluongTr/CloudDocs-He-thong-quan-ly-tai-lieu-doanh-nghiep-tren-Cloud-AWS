@@ -54,7 +54,7 @@ class CognitoProfileTest {
     @Test void placeholdersAreNotReturnedAsContactInformation() {
         assertNull(ProfilePresentation.email(user));assertEquals("Chưa cập nhật",ProfilePresentation.name(user));
         when(users.findByUsernameIgnoreCase("c_internal")).thenReturn(Optional.of(user));
-        var response=new AuthService(users,mock(com.clouddocs.audit.AuditLogService.class)).me("c_internal");
+        var response=new AuthService(users,mock(com.clouddocs.audit.AuditLogService.class),mock(com.clouddocs.department.DepartmentService.class)).me("c_internal");
         assertNull(response.email());assertEquals("Chưa cập nhật",response.fullName());assertEquals("ADMIN",response.role());
     }
     @Test void lockedProfileDoesNotTriggerProfileSyncOrGrantAuthorities() {

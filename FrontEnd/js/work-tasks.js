@@ -18,7 +18,7 @@ function workTaskStatus(task) {
     (task.lateSubmission ? '<span class="work-status late">Nộp muộn</span>' : '');
 }
 function workTaskError(error) { return error?.message || "Không thể thực hiện thao tác. Vui lòng thử lại."; }
-function canDeleteWorkTask(task){return currentUser?.role==='ADMIN' && Number(task.assignedBy?.id)===Number(currentUser?.id);}
+function canDeleteWorkTask(task){return ['ADMIN','MANAGER'].includes(currentUser?.role) && Number(task.assignedBy?.id)===Number(currentUser?.id);}
 function visibleWorkTasks(){
  const filter=document.getElementById('workTaskFilter').value,query=document.getElementById('workTaskSearch').value.trim().toLocaleLowerCase();
  return workTaskState.items.filter(t=>workTaskMatches(t,filter,currentUser?.id)).filter(t=>!query||[t.title,t.description,t.assignee?.fullName,t.assignedBy?.fullName].join(' ').toLocaleLowerCase().includes(query));
@@ -49,16 +49,16 @@ function renderWorkTasks() {
     .filter(task=>!query || [task.title,task.description,task.assignee?.fullName,task.assignedBy?.fullName].join(' ').toLocaleLowerCase().includes(query));
   updateWorkSelection();
   document.getElementById("workTaskSummary").innerHTML=[['Công việc',items.length],['Chờ duyệt',items.filter(t=>t.status==='SUBMITTED').length],['Quá hạn',items.filter(t=>t.overdue).length]].map(([label,count])=>'<div class="work-stat"><span>'+label+'</span><strong>'+count+'</strong></div>').join('');
-  const admin=currentUser?.role==='ADMIN';
+  const admin=['ADMIN','MANAGER'].includes(currentUser?.role);
   document.getElementById("workTaskTable").innerHTML=items.map(task=>'<tr>'+(admin?'<td><input type="checkbox" class="work-select" aria-label="Chọn công việc" '+(canDeleteWorkTask(task)&&!workTaskState.deleteBusy?'':'disabled ')+(workTaskState.selected.has(Number(task.id))?'checked ':'')+'onchange="selectWorkTask('+Number(task.id)+',this.checked)" /></td>':'')+'<td><strong data-no-translate>'+escapeHtml(task.title)+'</strong></td><td data-no-translate>'+escapeHtml(task.assignee.fullName)+'</td><td data-no-translate>'+escapeHtml(task.assignedBy.fullName)+'</td><td>'+escapeHtml(formatUpdated(task.dueAt))+'</td><td><div class="work-badges">'+workTaskStatus(task)+'</div></td><td><div class="work-actions"><button type="button" class="secondary-btn" onclick="openWorkTask('+Number(task.id)+')">Chi tiết</button>'+(canDeleteWorkTask(task)?'<button type="button" class="danger-btn" '+(workTaskState.deleteBusy?'disabled ':'')+'onclick="deleteWorkTasks(['+Number(task.id)+'])">Xóa</button>':'')+'</div></td></tr>').join('') || '<tr><td colspan="'+(admin?7:6)+'" class="trash-empty">Chưa có công việc phù hợp.</td></tr>';
 }
 window.loadWorkTasks = async function() {
   const token=getToken(), sequence=++workTaskState.listSequence;
-  const isAdmin=currentUser?.role==='ADMIN';
-  document.getElementById("openWorkTaskCreate").classList.toggle('hidden',!isAdmin);
-  document.querySelectorAll('[data-work-admin]').forEach(option=>{option.disabled=!isAdmin;option.hidden=!isAdmin;});
-  document.querySelectorAll('[data-work-selection]').forEach(node=>node.classList.toggle('hidden',!isAdmin));
-  document.getElementById('workTaskBulk').classList.toggle('hidden',!isAdmin);
+  const isAdmin=currentUser?.role==='ADMIN',canAssign=['ADMIN','MANAGER'].includes(currentUser?.role);
+  document.getElementById("openWorkTaskCreate").classList.toggle('hidden',!canAssign);
+  document.querySelectorAll('[data-work-admin]').forEach(option=>{option.disabled=!canAssign;option.hidden=!canAssign;});
+  document.querySelectorAll('[data-work-selection]').forEach(node=>node.classList.toggle('hidden',!canAssign));
+  document.getElementById('workTaskBulk').classList.toggle('hidden',!canAssign);
   const filter=document.getElementById("workTaskFilter");
   for(const option of Array.from(filter.options||[])){
     if(option.value==='mine'){option.hidden=isAdmin;option.disabled=isAdmin;}
@@ -67,7 +67,7 @@ window.loadWorkTasks = async function() {
   }
   if(isAdmin && filter.value==='mine')filter.value='assigned';
   if(!workTaskState.initialized){filter.value=isAdmin?'assigned':'mine';workTaskState.initialized=true;}
-  if(!isAdmin && ['assigned','review','all'].includes(filter.value))filter.value='mine';
+  if(!canAssign && ['assigned','review','all'].includes(filter.value))filter.value='mine';
   document.getElementById("workTaskTable").innerHTML='<tr><td colspan="6" class="trash-empty">Đang tải công việc...</td></tr>';
   try {
     const data=await api('/work-tasks'); requireSession(token);
@@ -90,7 +90,7 @@ function workReportCache(task) {
 async function renderWorkTaskDetail(task, sequence) {
   const mine=Number(task.assignee.id)===Number(currentUser?.id);
   const canWork=mine && ['TODO','IN_PROGRESS'].includes(task.status);
-  const canReview=currentUser?.role==='ADMIN' && Number(task.assignedBy.id)===Number(currentUser?.id) && task.status==='SUBMITTED';
+  const canReview=['ADMIN','MANAGER'].includes(currentUser?.role) && Number(task.assignedBy.id)===Number(currentUser?.id) && task.status==='SUBMITTED';
   workReportCache(task);
   const report=task.reportDocument;
   const attachment=report ? '<section class="work-section"><h3>Báo cáo đã nộp</h3><p data-no-translate>'+escapeHtml(report.title)+'</p><p class="work-pre" data-no-translate>'+escapeHtml(task.reportNote||'Không có ghi chú.')+'</p><small>Nộp lúc: '+escapeHtml(formatUpdated(task.submittedAt))+'</small>'+
@@ -176,7 +176,7 @@ for(const id of ['workTaskCreateModal','workTaskDetailModal'])document.getElemen
 document.getElementById('workTaskDetailContent').addEventListener('click',event=>{const button=event.target.closest('[data-work-action]');if(button)executeWorkAction(button.dataset.workAction);});
 document.getElementById('workTaskDetailContent').addEventListener('submit',event=>{if(event.target.id==='workSubmitForm'){event.preventDefault();executeWorkAction('submit');}});
 document.getElementById('openWorkTaskCreate').addEventListener('click',async()=>{
-  if(currentUser?.role!=='ADMIN')return;
+  if(!['ADMIN','MANAGER'].includes(currentUser?.role))return;
   const token=getToken();document.getElementById('workTaskCreateForm').reset();document.getElementById('workTaskCreateError').textContent='';
   document.getElementById('workTaskAssignee').innerHTML='<option value="">Đang tải nhân viên...</option>';
   document.getElementById('confirmWorkTaskCreate').disabled=true;
@@ -189,7 +189,7 @@ document.getElementById('openWorkTaskCreate').addEventListener('click',async()=>
   }catch(error){if(token===getToken())document.getElementById('workTaskCreateError').textContent=workTaskError(error);}
 });
 document.getElementById('workTaskCreateForm').addEventListener('submit',async event=>{
-  event.preventDefault();const button=document.getElementById('confirmWorkTaskCreate');if(button.disabled||currentUser?.role!=='ADMIN')return;
+  event.preventDefault();const button=document.getElementById('confirmWorkTaskCreate');if(button.disabled||!['ADMIN','MANAGER'].includes(currentUser?.role))return;
   const token=getToken();button.disabled=true;document.getElementById('workTaskCreateError').textContent='';
   try{
     const due=new Date(document.getElementById('workTaskDue').value);

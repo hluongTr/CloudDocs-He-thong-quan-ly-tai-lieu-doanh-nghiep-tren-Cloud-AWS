@@ -11,6 +11,7 @@ import java.util.List;
 
 @Service
 public class DocumentFavoriteService {
+    private final com.clouddocs.audit.AuditLogService audit;
     private final DocumentFavoriteRepository favorites;
     private final DocumentRepository documents;
     private final UserRepository users;
@@ -20,7 +21,8 @@ public class DocumentFavoriteService {
             DocumentFavoriteRepository favorites,
             DocumentRepository documents,
             UserRepository users,
-            DocumentPermissionService permissions) {
+            DocumentPermissionService permissions, com.clouddocs.audit.AuditLogService audit) {
+        this.audit=audit;
         this.favorites = favorites;
         this.documents = documents;
         this.users = users;
@@ -52,13 +54,14 @@ public class DocumentFavoriteService {
             favorite.setUser(user);
             favorite.setDocument(document);
             favorites.save(favorite);
+            audit.logInTransaction(username,"FAVORITE_ADD",documentId,null,com.clouddocs.auth.ProfilePresentation.name(user)+" đã thêm tài liệu vào yêu thích");
         }
     }
 
     @Transactional
     public void remove(Long documentId, String username) {
         User user = user(username);
-        favorites.findByUserIdAndDocumentId(user.getId(), documentId).ifPresent(favorites::delete);
+        favorites.findByUserIdAndDocumentId(user.getId(), documentId).ifPresent(favorite->{favorites.delete(favorite);audit.logInTransaction(username,"FAVORITE_REMOVE",documentId,null,com.clouddocs.auth.ProfilePresentation.name(user)+" đã bỏ tài liệu khỏi yêu thích");});
     }
 
     private User user(String username) {

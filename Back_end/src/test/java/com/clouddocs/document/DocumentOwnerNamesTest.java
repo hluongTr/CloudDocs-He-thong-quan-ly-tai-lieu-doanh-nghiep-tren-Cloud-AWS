@@ -19,7 +19,7 @@ class DocumentOwnerNamesTest {
     final DocumentPermissionService permissions = mock(DocumentPermissionService.class);
     final DocumentService service = new DocumentService(documents, mock(S3StorageService.class),
             mock(LocalFileStorageService.class), users, permissions, mock(AuditLogService.class),
-            audit, mock(StorageQuotaService.class), mock(com.clouddocs.work.WorkTaskRepository.class), "bucket");
+            audit, mock(StorageQuotaService.class), mock(com.clouddocs.work.WorkTaskRepository.class), mock(com.clouddocs.department.DepartmentService.class), "bucket");
     User admin, owner;
     Document doc;
     @BeforeEach void setup() {

@@ -64,9 +64,13 @@ public class AuditLogService {
         return auditLogRepository.save(log);
     }
 
+    public static List<AuditLog> visibleLogs(List<AuditLog> logs){
+        java.util.Set<String> uploaded=logs.stream().filter(l->"UPLOAD".equals(l.getAction())&&l.getDocument()!=null&&l.getUser()!=null).map(l->l.getDocument().getId()+":"+l.getUser().getId()).collect(java.util.stream.Collectors.toSet());
+        return logs.stream().filter(l->!"CREATE_DOCUMENT".equals(l.getAction())||l.getDocument()==null||l.getUser()==null||!uploaded.contains(l.getDocument().getId()+":"+l.getUser().getId())).toList();
+    }
     @Transactional(readOnly = true)
     public List<AuditLog> getAll() {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc();
+        return visibleLogs(auditLogRepository.findAllByOrderByCreatedAtDesc());
     }
 
     @Transactional(readOnly = true)
@@ -77,10 +81,10 @@ public class AuditLogService {
                         .orElseThrow(
                                 () -> new IllegalArgumentException("Không tìm thấy tài khoản"));
         if ("ADMIN".equalsIgnoreCase(user.getRole())) {
-            return auditLogRepository.findTop20ByOrderByCreatedAtDesc();
+            return visibleLogs(auditLogRepository.findTop20ByOrderByCreatedAtDesc());
         }
         // Filter by the authenticated actor before applying the top-20 limit.
-        return auditLogRepository.findTop20ByUserIdOrderByCreatedAtDesc(user.getId());
+        return visibleLogs(auditLogRepository.findTop20ByUserIdOrderByCreatedAtDesc(user.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +96,7 @@ public class AuditLogService {
                         .orElseThrow(
                                 () -> new IllegalArgumentException("Không tìm thấy tài khoản"));
 
-        return auditLogRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        return visibleLogs(auditLogRepository.findByUserIdOrderByCreatedAtDesc(user.getId()));
     }
 
     @Transactional(readOnly = true)

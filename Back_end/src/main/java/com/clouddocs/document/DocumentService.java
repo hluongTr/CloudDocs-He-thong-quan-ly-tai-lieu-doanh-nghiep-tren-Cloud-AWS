@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 @Service
 public class DocumentService {
 
+    private final com.clouddocs.department.DepartmentService departments;
     private final DocumentRepository repository;
     private final S3StorageService storageService;
     private final com.clouddocs.storage.LocalFileStorageService localFileStorage;
@@ -37,9 +38,11 @@ public class DocumentService {
             com.clouddocs.audit.AuditLogRepository auditLogs,
             com.clouddocs.storage.StorageQuotaService quotas,
             com.clouddocs.work.WorkTaskRepository workTasks,
+            com.clouddocs.department.DepartmentService departments,
             @Value("${aws.s3.bucket}") String bucket) {
 
         this.repository = repository;
+        this.departments=departments;
         this.storageService = storageService;
         this.localFileStorage = localFileStorage;
         this.users = users;
@@ -62,7 +65,7 @@ public class DocumentService {
     public List<DocumentResponse> findRecent(String username) {
         com.clouddocs.auth.User user = currentUser(username);
         List<String> actions =
-                List.of("VIEW", "DOWNLOAD", "EDIT", "SHARE", "UPLOAD", "CREATE_DOCUMENT", "RESTORE");
+                List.of("VIEW", "DOWNLOAD", "EDIT", "SHARE", "UPLOAD", "REPLACE_FILE", "CREATE_DOCUMENT", "RESTORE");
         LinkedHashMap<Long, Document> unique = new LinkedHashMap<>();
         auditLogs
                 .findRecentDocumentActivity(user.getId(), actions)
@@ -85,11 +88,14 @@ public class DocumentService {
         List<Document> source =
                 isAdmin(user)
                         ? repository.findAll(Sort.by(Sort.Direction.DESC, "updatedAt"))
-                        : repository.findAccessibleByUserId(user.getId());
+                        : com.clouddocs.auth.DepartmentScope.manager(user)&&com.clouddocs.auth.DepartmentScope.assigned(user)
+                            ? repository.findAccessibleForManager(user.getId(),user.getDepartment())
+                            : repository.findAccessibleByUserId(user.getId());
 
         var ownerNames = DocumentOwnerNames.resolve(source, users);
         return source.stream()
                 .filter(Document::isAvailable)
+                .filter(d -> !com.clouddocs.auth.DepartmentScope.manager(user) || permissionService.canView(d,user.getUsername(),false))
                 .filter(
                         d ->
                                 q == null
@@ -132,25 +138,17 @@ public class DocumentService {
         d.setTitle(request.title());
         d.setDescription(request.description());
         d.setFileName(request.fileName());
-        d.setFileType(request.fileType().toUpperCase(java.util.Locale.ROOT));
+        d.setFileType(fileTypeFromName(request.fileName()));
         d.setFileSize(request.fileSize());
         d.setOwner(user.getUsername());
         d.setOwnerId(user.getId());
-        d.setDepartment(request.department());
+        d.setDepartment(departments.documentName(request.department(),d.getDepartment()));
         d.setStatus("ACTIVE");
 
         d.setS3Key("documents/" + java.util.UUID.randomUUID());
 
         // Lưu tài liệu vào database
         Document savedDocument = repository.save(d);
-
-        // Ghi Audit Log sau khi tạo tài liệu thành công
-        logUploadAfterCommit(
-                owner,
-                "CREATE_DOCUMENT",
-                savedDocument.getId(),
-                null,
-                owner + " tạo tài liệu " + savedDocument.getTitle());
 
         return toResponse(savedDocument, user);
     }
@@ -162,16 +160,7 @@ public class DocumentService {
         com.clouddocs.auth.User user = currentUser(username);
         requireEdit(d, user);
 
-        d.setTitle(request.title());
-        d.setDescription(request.description());
-        d.setDepartment(request.department());
-
-        if (request.status() != null && !request.status().isBlank()) {
-            String status = request.status().toUpperCase(java.util.Locale.ROOT);
-            if (!List.of("ACTIVE", "SHARED", "ARCHIVED").contains(status))
-                throw new IllegalArgumentException("Trạng thái tài liệu không hợp lệ");
-            d.setStatus(status);
-        }
+        applyMetadata(d,request);
 
         Document savedDocument = repository.save(d);
 
@@ -184,6 +173,54 @@ public class DocumentService {
                 username + " chỉnh sửa tài liệu " + savedDocument.getTitle());
 
         return toResponse(savedDocument, user);
+    }
+
+    private String fileTypeFromName(String filename){int dot=filename.lastIndexOf('.');String type=dot<0?"FILE":filename.substring(dot+1).toUpperCase(java.util.Locale.ROOT);if(!type.matches("[A-Z0-9][A-Z0-9_-]{0,49}"))throw new IllegalArgumentException("Định dạng tệp không hợp lệ");return type;}
+    private void applyMetadata(Document d,UpdateDocumentRequest request){
+        d.setTitle(request.title());d.setDescription(request.description());
+        d.setDepartment(departments.documentName(request.department(),d.getDepartment()));
+        if(request.status()!=null&&!request.status().isBlank()){
+            String status=request.status().toUpperCase(java.util.Locale.ROOT);
+            if(!List.of("ACTIVE","SHARED","ARCHIVED").contains(status))throw new IllegalArgumentException("Trạng thái tài liệu không hợp lệ");
+            d.setStatus(status);
+        }
+    }
+
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public DocumentResponse replaceFile(Long id,MultipartFile file,UpdateDocumentRequest request,String username){
+        Document existing=get(id);var user=currentUser(username);requireEdit(existing,user);requireReportMutable(existing);
+        if(file==null)throw new IllegalArgumentException("Hãy chọn tệp thay thế");
+        String filename=file.getOriginalFilename();
+        if(filename==null||filename.isBlank()||filename.length()>255||filename.indexOf('/')>=0||filename.indexOf('\\')>=0||filename.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException("Tên tệp không hợp lệ");
+        int dot=filename.lastIndexOf('.');String type=dot<0?"FILE":filename.substring(dot+1).toUpperCase(java.util.Locale.ROOT);
+        if(!type.matches("[A-Z0-9][A-Z0-9_-]{0,49}"))throw new IllegalArgumentException("Định dạng tệp không hợp lệ");
+        quotas.validateFileSize(file.getSize());
+        // Lock owner allocations first, then the document, following the upload lock order.
+        quotas.requireCapacity(existing.getOwnerId(),id,file.getSize());
+        Document d=repository.findForUpdate(id).orElseThrow(()->new DocumentNotFoundException(id));repository.refreshState(d);
+        requireEdit(d,user);requireReportMutable(d);applyMetadata(d,request);
+        String oldKey=d.getS3Key(),newKey="documents/"+java.util.UUID.randomUUID();
+        boolean synchronizedTransaction=org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive();
+        try(var input=file.getInputStream()){
+            storageService.uploadReplacement(bucket,newKey,input,file.getSize());
+        }catch(java.io.IOException|RuntimeException ex){cleanReplacementObject(newKey);throw new IllegalStateException("Không tải được tệp thay thế. Tệp cũ vẫn được giữ nguyên",ex);}
+        if(synchronizedTransaction)org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization(){
+            @Override public void afterCompletion(int status){if(status==STATUS_COMMITTED)cleanPreviousFile(oldKey);else cleanReplacementObject(newKey);}
+        });
+        try{
+            String oldFilename=d.getFileName();d.setS3Key(newKey);d.setFileName(filename);d.setFileType(type);d.setFileSize(file.getSize());
+            Document saved=repository.saveAndFlush(d);
+            auditLogService.logInTransaction(username,"REPLACE_FILE",id,null,com.clouddocs.auth.ProfilePresentation.name(user)+" đã thay tệp "+oldFilename+" bằng "+filename+" cho tài liệu "+d.getTitle());
+            DocumentResponse response=toResponse(saved,user);
+            if(!synchronizedTransaction)cleanPreviousFile(oldKey);
+            return response;
+        }catch(RuntimeException ex){if(!synchronizedTransaction)cleanReplacementObject(newKey);throw ex;}
+    }
+    private void cleanPreviousFile(String key){
+        cleanReplacementObject(key);try{localFileStorage.deleteIfExists(key);}catch(RuntimeException ex){org.slf4j.LoggerFactory.getLogger(DocumentService.class).warn("Không dọn được file local cũ sau thay tệp",ex);}
+    }
+    private void cleanReplacementObject(String key){
+        try{storageService.deleteIfExists(bucket,key);}catch(RuntimeException ex){org.slf4j.LoggerFactory.getLogger(DocumentService.class).warn("Không dọn được object sau thay tệp: {}",key,ex);}
     }
 
     @Transactional
@@ -485,7 +522,7 @@ public class DocumentService {
                 d.getDepartment(),
                 d.getStatus(),
                 d.getUpdatedAt().toString(),
-                permissionService.effectiveAccess(d, user));
+                permissionService.effectiveAccess(d, user),permissionService.inLibrary(d,user));
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)

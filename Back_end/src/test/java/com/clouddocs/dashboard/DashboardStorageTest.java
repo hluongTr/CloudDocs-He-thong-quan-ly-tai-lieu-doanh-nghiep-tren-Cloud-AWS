@@ -141,4 +141,7 @@ class DashboardStorageTest {
         assertEquals(0L, controller.summary(auth).get("downloads"));
         verify(auditLogs, never()).countByAction(anyString());
     }
+
+ @Test void sharedDocumentsCannotExposeOtherUsersActivityInDashboard(){User user=user(2L,"USER");when(auth.getName()).thenReturn("account2");when(users.findByUsernameIgnoreCase("account2")).thenReturn(Optional.of(user));when(documents.findAccessibleByUserId(2L)).thenReturn(List.of(file(2L,20),file(3L,30)));when(documents.findByOwnerId(2L)).thenReturn(List.of(file(2L,20)));var event=new com.clouddocs.audit.AuditLog();event.setUser(user);event.setAction("FAVORITE_ADD");event.setDetails("Own activity");when(auditLogs.findTop20ByUserIdOrderByCreatedAtDesc(2L)).thenReturn(List.of(event));var summary=controller.summary(auth);var activity=(List<?>)summary.get("recentActivity");assertEquals(1,activity.size());assertEquals("account2",((com.clouddocs.audit.AuditLogController.AuditLogResponse)activity.getFirst()).username());verify(auditLogs,never()).findTop20ByOrderByCreatedAtDesc();}
+
 }

@@ -42,7 +42,7 @@ public class AuditLogController {
                 .toList();
     }
 
-    private static AuditLogResponse toResponse(AuditLog log) {
+    public static AuditLogResponse toResponse(AuditLog log) {
 
         String username = log.getUser() != null ? log.getUser().getUsername() : null;
 

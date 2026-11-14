@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class DocumentFavoriteServiceTest {
@@ -22,8 +22,9 @@ class DocumentFavoriteServiceTest {
     private final DocumentRepository documents = mock(DocumentRepository.class);
     private final UserRepository users = mock(UserRepository.class);
     private final DocumentPermissionService permissions = mock(DocumentPermissionService.class);
+    private final com.clouddocs.audit.AuditLogService audit=mock(com.clouddocs.audit.AuditLogService.class);
     private final DocumentFavoriteService service =
-            new DocumentFavoriteService(favorites, documents, users, permissions);
+            new DocumentFavoriteService(favorites, documents, users, permissions, audit);
     private User user;
     private Document document;
 
@@ -85,4 +86,7 @@ class DocumentFavoriteServiceTest {
         service.remove(9L, "user1");
         verify(favorites).delete(favorite);
     }
+
+ @Test void addingAndRemovingFavoritesRecordsOnlyRealChanges(){when(permissions.canView(document,"user1",false)).thenReturn(true);service.add(9L,"user1");verify(audit).logInTransaction(eq("user1"),eq("FAVORITE_ADD"),eq(9L),isNull(),anyString());var saved=new DocumentFavorite();when(favorites.findByUserIdAndDocumentId(3L,9L)).thenReturn(Optional.of(saved));service.add(9L,"user1");service.remove(9L,"user1");verify(audit).logInTransaction(eq("user1"),eq("FAVORITE_REMOVE"),eq(9L),isNull(),anyString());verify(audit,times(2)).logInTransaction(any(),any(),any(),any(),any());}
+
 }

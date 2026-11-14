@@ -6,6 +6,9 @@ import java.util.Optional;
 import java.util.List;
 
 public interface UserRepository extends JpaRepository<User, Long> {
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically=true,clearAutomatically=true)
+    @Query("update User e set e.department=:newName where e.department=:oldName")
+    int renameDepartment(@org.springframework.data.repository.query.Param("oldName") String oldName,@org.springframework.data.repository.query.Param("newName") String newName);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where upper(u.role) = 'ADMIN' order by u.id")
     List<User> lockAdmins();

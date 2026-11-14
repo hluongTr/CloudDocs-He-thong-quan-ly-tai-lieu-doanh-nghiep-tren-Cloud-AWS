@@ -1,93 +1,191 @@
+<img src="FrontEnd/assets/clouddocs-logo.png" width="64" height="64" alt="CloudDocs">
+
 # CloudDocs
 
-Enterprise document management with Java 21 / Spring Boot 3.5.6, MySQL, vanilla HTML/CSS/JS,
-Cognito Authorization Code + PKCE and private S3 signed URLs.
+Quản lý tài liệu, chia sẻ nội bộ và giao việc theo phòng ban trên nền tảng AWS.
 
-## Run the existing project
+## Mục lục
 
-1. Use the existing business schema. Review the migration history before applying missing
-   scripts in Back_end/db/migration; the application uses ddl-auto=validate and never migrates
-   automatically. The repository does not yet include an empty-database base-schema installer.
-2. Build Back_end with Java 21: mvn -f Back_end/pom.xml package.
-3. From the project root run scripts/start-local-backend.ps1. It prompts for the MySQL password,
-   sets the public development Cognito issuer/client and derives CORS from the frontend callback.
-   DB host/port/name/user are script parameters. S3 credentials come from the normal AWS chain.
-4. Run scripts/start-frontend.ps1 (or node scripts/serve-frontend.cjs). Open the printed URL.
-   The frontend server derives its host, port and path from FrontEnd/js/cognito-config.js.
-   It exposes only FrontEnd, including the configured /FrontEnd path alias if present.
-5. Stop and restart the backend after a new build; refresh the browser after frontend changes.
-   An already running Java process does not automatically reload a rebuilt JAR.
+- [Chức năng đã triển khai](#chức-năng-đã-triển-khai)
+- [Phân quyền](#phân-quyền)
+- [Kiến trúc](#kiến-trúc)
+- [Chạy local](#chạy-local)
+- [Cấu hình](#cấu-hình)
+- [Migration và dữ liệu](#migration-và-dữ-liệu)
+- [API và kiểm thử](#api-và-kiểm-thử)
+- [Triển khai AWS](#triển-khai-aws)
 
-The public callback/logout URLs in cognito-config.js must exactly match the app client's
-allowed URLs. For a different pool, configure COGNITO_ISSUER_URI, COGNITO_CLIENT_ID and
-COGNITO_USER_INFO_URI together. Do not put client secrets, AWS credentials or tokens in source.
-For deployed environments use the intended database, HTTPS, CORS origin and IAM role;
-local example defaults are not production configuration.
+**Tiếng Việt** | [English](README.en.md)
 
-## Identity, names and access
+Ứng dụng quản lý tài liệu doanh nghiệp với Java 21, Spring Boot 3.5.6, MySQL, JavaScript thuần và AWS. Dự án kết hợp lưu trữ S3 riêng tư, đăng nhập Cognito, phân quyền phòng ban và giao việc, nộp báo cáo.
 
-Identity links use issuer + sub, never email. New accounts become USER; existing role/status
-are read from MySQL on each request. Bootstrap the first admin with the reviewed template
-Back_end/db/bootstrap-cognito-admin.sql; it defaults to NULL targets and ROLLBACK.
+## Chức năng đã triển khai
 
-Profile Họ và tên is used for notification authors, activity actors and document owners in all
-collections. Ownership checks use owner_id. The historical owner text and password columns
-remain for schema compatibility, not for choosing an account or signing in with a local password.
-Only ACTIVE accounts with ADMIN/USER roles can access business APIs.
+| Nhóm | Chức năng |
+| --- | --- |
+| Đăng nhập, hồ sơ | Cognito Authorization Code + PKCE; hiển thị họ tên; cập nhật hồ sơ; avatar JPG/PNG tối đa 5 MiB, chuẩn hóa ảnh vuông 256 × 256. |
+| Tài liệu | Upload tối đa 100 MiB/tệp; tự nhận diện định dạng; tìm kiếm, lọc, xem trước, tải xuống; sửa tên/mô tả và tùy chọn ghi đè nội dung. |
+| Chọn nhiều | Chia sẻ, tải xuống, chuyển thùng rác; xử lý kết quả từng tệp khi có lỗi một phần. |
+| Chia sẻ | Quyền xem/tải/chỉnh sửa; trang Được chia sẻ và Đã chia sẻ; thống kê người nhận, phòng ban, quyền; đổi hoặc thu hồi quyền trực tiếp. |
+| Thùng rác | Xóa mềm, khôi phục và xóa vĩnh viễn một/nhiều tài liệu; lưu lịch sử thao tác. |
+| Bộ sưu tập | Tài liệu gần đây, yêu thích; ghi nhật ký thêm/bỏ yêu thích. |
+| Công việc | Giao việc, hạn nộp, bắt đầu làm, báo cáo bằng tài liệu, ghi chú, yêu cầu sửa và duyệt; nhận diện quá hạn/nộp muộn; chọn/xóa nhiều công việc. |
+| Dung lượng | Trang quản lý riêng, đã dùng/tổng hạn mức, biểu đồ theo định dạng, tệp lớn xếp giảm dần, thống kê thùng rác. Admin xem tổng hệ thống với hạn mức 1 TB; USER/MANAGER mặc định 100 GB. |
+| Quản trị | Tài khoản, vai trò, trạng thái; thêm/đổi tên/ngừng sử dụng/xóa phòng ban, gán nhân viên; thông báo chung. |
+| Nhật ký, thông báo | Hiển thị họ tên người thao tác và hành động; thông báo công việc riêng theo người nhận; admin xóa thông báo chung. |
+| Giao diện | Responsive; tìm kiếm bằng nút Tìm/Enter; làm mới danh sách; logo dẫn về tổng quan. |
 
-ADMIN sees system documents and global audit history. USER sees owned/shared documents and
-only their own actor audit events. OWNER/ADMIN manage shares and trash; EDIT edits/downloads;
-DOWNLOAD downloads; VIEW only previews. Deletion marks a removable account DELETED so it is
-hidden and denied access while retaining identity/audit references. It does not remove the user
-from AWS Cognito. Accounts owning active/trash documents cannot be deleted.
+## Phân quyền
 
-## Documents, trash and bulk actions
+| Phạm vi | USER | MANAGER | ADMIN |
+| --- | --- | --- | --- |
+| Tài liệu | Sở hữu hoặc được cấp quyền | Như USER; thêm quyền xem tài liệu của chủ sở hữu cùng phòng ban | Toàn hệ thống |
+| Giao việc | Thực hiện việc được giao | Giao cho USER hoạt động cùng phòng ban | Giao cho USER/MANAGER hoạt động |
+| Duyệt báo cáo | Không | Công việc do mình giao | Công việc do mình giao |
+| Nhật ký | Hoạt động của chính mình | Hoạt động của chính mình | Toàn hệ thống |
+| Quản lý vai trò, tài khoản, phòng ban | Không | Không | Có |
 
-Upload: metadata -> signed PUT URL -> PUT file to S3 -> upload-complete. Failed uploads may
-leave an allocation that can be moved to trash and permanently deleted. UUID object keys keep
-simultaneous same-name uploads distinct and avoid long encoded filename keys.
+Chỉ admin đổi vai trò. Nhân viên chỉ chọn phòng ban có sẵn khi được phép tự chọn; “Chưa cập nhật” là trạng thái chưa được gán. Phạm vi trưởng phòng dựa vào phòng ban hiện tại của chủ sở hữu, không dựa vào nhãn phòng ban của tài liệu; không tự cấp quyền sửa/tải/chia sẻ/xóa.
 
-DELETE /api/documents/{id} moves to TRASHED and retains the file and shares. Trash blocks
-preview/download/edit/share. Restore returns to ACTIVE and keeps prior shares. Permanent delete
-removes the stored object and permissions, sets metadata PURGED with size 0, and preserves audit
-references. Only owner/admin can manage trash. No automatic empty-trash job is configured.
+Chủ sở hữu/admin quản lý chia sẻ và thùng rác. VIEW cho xem trước; DOWNLOAD thêm tải xuống; EDIT thêm chỉnh sửa/ghi đè. Tệp chỉ được chia sẻ đến tài khoản nằm trong Được chia sẻ, không trộn vào thư viện Tài liệu riêng. Backend kiểm tra quyền ở từng yêu cầu.
 
-The Documents table supports selecting visible rows, bulk trash, one-recipient/many-document
-sharing and separate-file downloads. Each request rechecks access. Partial failures remain
-selected and batches stop when the login session changes. Browsers may ask to allow multiple
-file downloads. Zero-byte files are valid downloads/previews.
+## Kiến trúc
 
-Global announcements can be created/deleted by ADMIN; deletion affects all accounts.
-Work-task notifications are private to their recipient, who can dismiss them. CREATE/EDIT/SHARE/DELETE/RESTORE/PURGE and announcement actions are represented in
-audit logs. Metadata edits, sharing and announcement mutations write their audit in the same
-transaction. Upload audit is written after commit to avoid nested quota-lock waits.
+- Backend: Spring Security, Spring Data JPA/Hibernate, Bean Validation, AWS SDK v2.
+- Frontend: HTML/CSS/JavaScript thuần, không cần build npm.
+- MySQL 8 lưu metadata, quyền, hồ sơ, công việc và nhật ký; có thể chạy trên RDS.
+- Cognito xác thực bằng issuer + sub, không dùng email làm khóa danh tính.
+- S3 riêng tư lưu tệp; EC2 chạy backend, frontend có thể phục vụ qua reverse proxy HTTPS.
 
-## Work assignment and reports
+```mermaid
+flowchart TD
+    Web["Trình duyệt"] -->|REST API| API["Spring Boot / EC2"]
+    Web <-->|Code + PKCE| Auth["Amazon Cognito"]
+    Web <-->|URL ký trước| S3["S3 riêng tư"]
+    API -->|Metadata và quyền| DB["MySQL / RDS"]
+    API -->|Xác minh token| Auth
+    API -->|Kiểm tra và quản lý tệp| S3
+```
 
-The Công việc page supports one-person assignments, deadlines, progress, document reports,
-creator approval/change requests, private notifications and audit events. Apply migration 06
-before starting this backend. See [setup and workflow](WORK_TASKS.md) for the exact migration
-steps, permissions and live test sequence. Existing global notifications remain global.
+Upload thông thường đi trực tiếp tới S3 bằng URL ký trước; backend xác nhận đối tượng trước khi hoàn tất. Ghi đè đi qua backend, dùng khóa S3 mới, giữ ID/chủ sở hữu/quyền/yêu thích. Avatar lưu trong database.
 
-## Storage
+## Cấu trúc dự án
 
-The sidebar above the account footer shows allocated personal bytes / quota, including pending
-uploads and trash. USER defaults to 100 GB, ADMIN to 1 TB. Shares charge only the owner.
-The distribution chart is separate: ADMIN sees all active system documents; USER sees only
-owned active documents. All recorded formats appear, including 0 B; unknown sizes are explicit.
-These are database metadata allocations, not a complete physical S3 inventory or version count.
-See [storage details](STORAGE_QUOTAS.md).
+| Đường dẫn | Nội dung |
+| --- | --- |
+| [Back_end/src/main](Back_end/src/main) | Backend và cấu hình |
+| [Back_end/src/test](Back_end/src/test) | Kiểm thử backend |
+| [Back_end/db/migration](Back_end/db/migration) | Migration có thứ tự |
+| [Back_end/db](Back_end/db) | Công cụ chẩn đoán, bootstrap admin, dọn audit trùng tùy chọn |
+| [Back_end/aws/s3](Back_end/aws/s3) | Mẫu IAM, CORS, script thiết lập/kiểm tra bucket |
+| [FrontEnd](FrontEnd) | Giao diện, tài nguyên và tests |
+| [scripts](scripts) | Công cụ chạy local, kiểm tra Cognito |
 
-## Verification and documentation
+## Chạy local
 
-- Backend: mvn -f Back_end/pom.xml test
-- Frontend: node --test FrontEnd/tests/*.test.cjs
-- PowerShell scripts can be syntax-checked without running their external operations.
-- [Review and remaining live checks](PROJECT_REVIEW.md)
-- [Backend APIs and migration order](Back_end/README.md)
-- [Frontend server and configuration](FrontEnd/README.md)
-- [S3 infrastructure templates](Back_end/aws/s3/README.md)
+Cài JDK 21, Maven 3.9+, Node.js 20+, MySQL 8. Chuẩn bị Cognito public app client bật Code + PKCE và bucket S3 riêng tư với quyền AWS cho backend.
 
-Automated tests use mock repositories and AWS clients. They do not prove real database migrations,
-row-lock concurrency, Cognito redirects/UserInfo, S3 CORS/object transfers or browser PDF rendering.
-No review step executes SQL migrations, changes AWS policies or deletes uploaded user files.
+**Database:** repository có migration nâng cấp, chưa có bộ tạo schema nền hoàn chỉnh cho database trống. Nhập schema nghiệp vụ hiện có (users, documents, audit_logs...) rồi đối chiếu các migration còn thiếu. Ứng dụng dùng ddl-auto=validate và không tự chạy migration.
+
+Tại thư mục gốc:
+
+```powershell
+mvn -f Back_end/pom.xml clean package
+./scripts/start-local-backend.ps1 -DatabaseHost localhost -DatabasePort 3306 -DatabaseName company_documents -DatabaseUser root
+```
+
+Script hỏi mật khẩu MySQL ở chế độ ẩn, dùng cấu hình Cognito phát triển hiện có. Để dùng pool khác, cấu hình môi trường rồi chạy JAR trực tiếp:
+
+```powershell
+java -jar Back_end/target/clouddocs-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+```
+
+Terminal khác:
+
+```powershell
+node scripts/serve-frontend.cjs
+```
+
+Mở URL được in, mặc định http://127.0.0.1:5500/FrontEnd/index.html; không mở file://. Health: http://localhost:8080/api/health. Sửa Java cần build và khởi động lại backend.
+
+Admin đầu tiên: đăng nhập Cognito một lần rồi đọc/điền đúng tài khoản trong [bootstrap-cognito-admin.sql](Back_end/db/bootstrap-cognito-admin.sql). Script mặc định NULL và ROLLBACK để tránh nâng quyền nhầm.
+
+## Cấu hình
+
+| Biến môi trường | Ý nghĩa / mặc định |
+| --- | --- |
+| DB_HOST, DB_PORT, DB_NAME | localhost, 3306, company_documents |
+| DB_USERNAME, DB_PASSWORD | Tài khoản MySQL thực tế |
+| SPRING_DATASOURCE_URL | Ghi đè JDBC URL, cấu hình TLS khi triển khai |
+| COGNITO_ISSUER_URI, COGNITO_CLIENT_ID | Issuer và public client cùng pool |
+| COGNITO_USER_INFO_URI | UserInfo endpoint của pool tương ứng |
+| COGNITO_NEW_USER_STATUS | ACTIVE hoặc PENDING_APPROVAL; mặc định ACTIVE |
+| AWS_REGION, S3_BUCKET | Region và bucket lưu tài liệu |
+| AWS_PROFILE | Tùy chọn profile local; hỗ trợ chuỗi credentials mặc định SDK |
+| S3_PRESIGN_EXPIRY | 900 giây |
+| CORS_ALLOWED_ORIGINS | Các origin frontend phân cách dấu phẩy |
+| STORAGE_USER_QUOTA_BYTES | 100000000000: 100 GB cho USER/MANAGER |
+| STORAGE_ADMIN_QUOTA_BYTES | 1000000000000: 1 TB cho admin/tổng hệ thống |
+| PORT | 8080 |
+
+Đặt biến trong terminal/IDE/service; .env không tự được nạp. Chỉnh API_BASE trong FrontEnd/js/app.js và cấu hình public trong [cognito-config.js](FrontEnd/js/cognito-config.js). Callback/logout phải khớp chính xác Cognito. Region Cognito có thể khác S3. Không đưa mật khẩu, AWS secret, token hoặc client secret vào Git/frontend. EC2 nên dùng IAM instance role. JDBC mặc định phát triển không bật TLS.
+
+## Migration và dữ liệu
+
+Sao lưu, kiểm tra database đích và chỉ chạy migration thiếu sau khi đối chiếu schema; MySQL DDL có thể tự commit.
+
+| Thứ tự | Script |
+| --- | --- |
+| Kiểm tra | [00_PRECHECK](Back_end/db/migration/00_PRECHECK.sql) |
+| 01 | [Quyền tài liệu](Back_end/db/migration/01_APPLY_document_permissions.sql) |
+| 02 | [Yêu thích](Back_end/db/migration/02_APPLY_document_favorites.sql) |
+| 03 | [Thông báo](Back_end/db/migration/03_APPLY_notifications.sql) |
+| 04 | [Danh tính Cognito](Back_end/db/migration/04_APPLY_cognito_identities.sql) |
+| 05 | [Email tùy chọn](Back_end/db/migration/05_APPLY_optional_contact_email.sql) |
+| 06 | [Công việc](Back_end/db/migration/06_APPLY_work_tasks.sql) |
+| 07 | [Phòng ban và avatar](Back_end/db/migration/07_APPLY_departments_avatars.sql) |
+
+Trưởng phòng, Đã chia sẻ, ghi đè tệp không cần migration sau 07. Giữ [chẩn đoán hồ sơ/dung lượng](Back_end/db/diagnose-profile-storage.sql) và [dọn nhật ký tạo trùng](Back_end/db/08_OPTIONAL_cleanup_duplicate_creation_logs.sql). Script dọn là tùy chọn: xem trước CREATE đã có UPLOAD tương ứng trước khi quyết định xóa.
+
+## API và kiểm thử
+
+API nghiệp vụ yêu cầu Bearer access token Cognito. Các nhóm chính: /api/profile, /api/documents, /api/shares/sent, /api/departments, /api/users, /api/work-tasks, /api/storage, /api/audit-logs, /api/notifications. Controller trong Back_end/src/main là nguồn chi tiết route và payload.
+
+```powershell
+mvn -f Back_end/pom.xml test
+node --test FrontEnd/tests/*.test.cjs
+```
+
+JUnit/Mockito/MockMvc và Node test runner kiểm tra phân quyền, chia sẻ, nhật ký, dung lượng, ghi đè, công việc và trạng thái giao diện. Test mock không thay kiểm tra thực tế MySQL/RDS, Cognito redirect, S3 CORS và điện thoại. Trước bàn giao kiểm tra ba vai trò: upload/ghi đè, các quyền chia sẻ/thu hồi, khôi phục/xóa, giao việc đúng/sai phòng ban, nộp muộn/duyệt/yêu cầu sửa, dung lượng và phạm vi nhật ký.
+
+## Triển khai AWS
+
+1. Chuẩn bị schema/migration RDS, kết nối/TLS/security group phù hợp.
+2. Chuẩn bị S3 riêng tư, Block Public Access, mã hóa và IAM tối thiểu. Đọc các mẫu Back_end/aws/s3 trước khi áp dụng; ứng dụng không tự tạo hạ tầng.
+3. Build JAR, chạy profile aws dưới service trên EC2; đặt môi trường và IAM instance role.
+4. Phục vụ frontend bằng HTTPS/reverse proxy; cập nhật API_BASE, Cognito callback/logout, CORS backend và S3 theo origin thật.
+5. Proxy cần nhận upload 100 MiB cộng overhead; ví dụ Nginx client_max_body_size 101m. Backend giới hạn multipart request 101 MB.
+6. Kiểm tra health và luồng nghiệp vụ thực tế.
+
+Chưa có CI/CD hoặc bộ tự động triển khai toàn bộ EC2/RDS/Cognito.
+
+## Quy ước, giới hạn và xử lý lỗi
+
+- Dung lượng dựa metadata, gồm upload chờ và thùng rác; chia sẻ chỉ tính một lần cho chủ sở hữu. Biểu đồ tổng quan tính tệp hoạt động. Đây không phải kiểm kê S3 vật lý/phiên bản hay hóa đơn AWS. GB/TB hệ thập phân.
+- Thùng rác giữ quyền để khôi phục; xóa vĩnh viễn giữ lịch sử. Không tự dọn thùng rác. URL ký trước có thể dùng đến hết hạn sau thu hồi quyền.
+- Chưa có giao diện khôi phục phiên bản tệp; nếu dọn S3 thất bại cần xử lý đối tượng sót.
+- TODO → IN_PROGRESS → SUBMITTED → COMPLETED; yêu cầu sửa trả về IN_PROGRESS. Cho nộp muộn, không tự phạt. Nội dung tài liệu báo cáo đã nộp/duyệt được bảo vệ.
+- Ngừng phòng ban chặn chọn mới; xóa bỏ liên kết cũ. Công việc đã giao vẫn giữ quan hệ; xóa công việc không xóa báo cáo.
+- Xóa tài khoản là DELETED trong ứng dụng, không xóa Cognito; bảo vệ admin cuối cùng và tài khoản còn tài liệu/công việc mở.
+- Mỗi triển khai dành cho một doanh nghiệp; chưa cách ly nhiều doanh nghiệp trong cùng database hoặc gửi email nhắc hạn.
+
+| Lỗi | Cách kiểm tra |
+| --- | --- |
+| MySQL Access denied | DB_USERNAME/PASSWORD trong đúng tiến trình; Workbench không tự truyền mật khẩu sang backend. |
+| Unable to determine Dialect | Đọc SQLException phía trước; xử lý kết nối/quyền/schema thay vì che lỗi bằng dialect. |
+| Thiếu bảng/cột | Đối chiếu database và migration; không bật ddl-auto=update để bỏ qua kiểm tra. |
+| Cognito redirect | Khớp scheme/host/port/path callback và logout. |
+| S3 403/CORS | IAM, bucket/region, origin, thời hạn URL, CORS S3. |
+| Upload 413 | Giới hạn proxy/backend và overhead multipart. |
+| Trưởng phòng không giao được | Gán phòng ban; người nhận phải là USER hoạt động cùng phòng ban. |
+| Bản chạy chưa cập nhật | Ctrl+F5 frontend; build và restart Java. |

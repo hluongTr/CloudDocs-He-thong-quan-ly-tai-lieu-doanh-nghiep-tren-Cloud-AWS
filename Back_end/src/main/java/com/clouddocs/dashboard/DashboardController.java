@@ -43,7 +43,9 @@ public class DashboardController {
         List<Document> documents =
                 "ADMIN".equalsIgnoreCase(user.getRole())
                         ? repository.findAll()
-                        : repository.findAccessibleByUserId(user.getId());
+                        : com.clouddocs.auth.DepartmentScope.manager(user)&&com.clouddocs.auth.DepartmentScope.assigned(user)
+                            ? repository.findAccessibleForManager(user.getId(),user.getDepartment())
+                            : repository.findAccessibleByUserId(user.getId());
 
         List<Document> storedDocuments = documents.stream().filter(d -> !d.isPurged()).toList();
         documents = documents.stream().filter(Document::isAvailable).toList();
@@ -112,6 +114,8 @@ public class DashboardController {
         result.put("storageByType", storageByType);
         result.put("storageDistribution", storageDistribution(documents, user));
         result.put("recentDocuments", recent);
+        var activity="ADMIN".equalsIgnoreCase(user.getRole())?auditLogRepository.findTop20ByOrderByCreatedAtDesc():auditLogRepository.findTop20ByUserIdOrderByCreatedAtDesc(user.getId());
+        result.put("recentActivity",com.clouddocs.audit.AuditLogService.visibleLogs(activity).stream().limit(5).map(com.clouddocs.audit.AuditLogController::toResponse).toList());
         result.put("isAdmin", "ADMIN".equalsIgnoreCase(user.getRole()));
         if ("ADMIN".equalsIgnoreCase(user.getRole())) {
             Map<Long, Long> usageByOwner =

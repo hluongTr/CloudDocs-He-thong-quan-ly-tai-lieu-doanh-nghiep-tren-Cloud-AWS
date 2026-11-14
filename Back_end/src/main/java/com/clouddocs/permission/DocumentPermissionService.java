@@ -32,6 +32,13 @@ public class DocumentPermissionService {
         this.auditLogService = auditLogService;
     }
 
+    @Transactional(readOnly=true)
+    public List<DocumentPermissionDtos.SentShare> listSent(String username){
+        User actor=users.findByUsernameIgnoreCase(username).filter(u->"ACTIVE".equalsIgnoreCase(u.getStatus())).orElseThrow(()->new org.springframework.security.access.AccessDeniedException("Tài khoản không hoạt động"));
+        boolean admin="ADMIN".equalsIgnoreCase(actor.getRole());
+        return permissions.findOutgoing(actor.getId(),admin).stream().filter(p->admin||java.util.Objects.equals(p.getDocument().getOwnerId(),actor.getId())).filter(p->!p.getDocument().isPurged()).filter(p->!"DELETED".equalsIgnoreCase(p.getUser().getStatus())).map(p->{Document d=p.getDocument();User target=p.getUser();return new DocumentPermissionDtos.SentShare(p.getId(),d.getId(),d.getTitle(),d.getFileName(),d.getFileType(),d.getStatus(),target.getId(),com.clouddocs.auth.ProfilePresentation.name(target),com.clouddocs.auth.ProfilePresentation.email(target),target.getDepartment(),p.getPermission().name(),p.getCreatedAt(),d.isAvailable()&&(admin||java.util.Objects.equals(d.getOwnerId(),actor.getId())));}).toList();
+    }
+
     @Transactional(readOnly = true)
     public List<PermissionResponse> list(Long documentId, String username) {
         Document document = getDocument(documentId);
@@ -140,6 +147,8 @@ public class DocumentPermissionService {
         if (!document.isAvailable()) return false;
         if (admin) return true;
         if (isOwner(document, username)) return true;
+        User actor=users.findByUsernameIgnoreCase(username).orElseThrow();
+        if(canViewDepartment(document,actor))return true;
         return has(
                 document,
                 username,
@@ -176,9 +185,17 @@ public class DocumentPermissionService {
         if (has(document, user.getUsername(), List.of(DocumentPermissionType.DOWNLOAD)))
             return "DOWNLOAD";
         if (has(document, user.getUsername(), List.of(DocumentPermissionType.VIEW))) return "VIEW";
+        if(canViewDepartment(document,user))return "VIEW";
         return "NONE";
     }
 
+    public boolean inLibrary(Document document,User user){
+        return "ADMIN".equalsIgnoreCase(user.getRole())||isOwner(document,user.getUsername())||canViewDepartment(document,user);
+    }
+    private boolean canViewDepartment(Document document,User actor){
+        if(!com.clouddocs.auth.DepartmentScope.manager(actor)||!com.clouddocs.auth.DepartmentScope.assigned(actor)||!"ACTIVE".equalsIgnoreCase(actor.getStatus()))return false;
+        return document.getOwnerId()!=null&&users.findById(document.getOwnerId()).filter(owner->!"DELETED".equalsIgnoreCase(owner.getStatus())).map(owner->com.clouddocs.auth.DepartmentScope.same(actor,owner)).orElse(false);
+    }
     public boolean isOwner(Document document, String username) {
         return document.getOwnerId() != null && users.findByUsernameIgnoreCase(username)
                 .map(user -> document.getOwnerId().equals(user.getId())).orElse(false);

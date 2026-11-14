@@ -21,7 +21,7 @@ class DocumentTrashTest {
     AuditLogService audit = mock(AuditLogService.class);
     DocumentPermissionService permissions = mock(DocumentPermissionService.class);
     DocumentService service = new DocumentService(documents, s3, local, users, permissions,
-            audit, mock(AuditLogRepository.class), mock(StorageQuotaService.class), mock(com.clouddocs.work.WorkTaskRepository.class), "bucket");
+            audit, mock(AuditLogRepository.class), mock(StorageQuotaService.class), mock(com.clouddocs.work.WorkTaskRepository.class), mock(com.clouddocs.department.DepartmentService.class), "bucket");
     Document doc;
     User owner;
 
@@ -99,7 +99,7 @@ class DocumentTrashTest {
     }
     @Test void submittedAndApprovedReportsCannotBeTrashedOrOverwritten() {
         var taskRepository=mock(com.clouddocs.work.WorkTaskRepository.class);
-        var guarded=new DocumentService(documents,s3,local,users,permissions,audit,mock(AuditLogRepository.class),mock(StorageQuotaService.class),taskRepository,"bucket");
+        var guarded=new DocumentService(documents,s3,local,users,permissions,audit,mock(AuditLogRepository.class),mock(StorageQuotaService.class),taskRepository, mock(com.clouddocs.department.DepartmentService.class), "bucket");
         when(taskRepository.existsByReportDocumentIdAndStatusIn(eq(9L),anyCollection())).thenReturn(true);
         when(permissions.canEdit(doc,owner.getUsername(),false)).thenReturn(true);
         assertThrows(IllegalStateException.class,()->guarded.delete(9L,owner.getUsername()));

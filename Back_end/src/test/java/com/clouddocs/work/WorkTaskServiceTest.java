@@ -120,4 +120,10 @@ class WorkTaskServiceTest {
         Response result=service.submit(8L,new SubmitRequest(0L,7L,"Late report"),"worker");
         assertEquals("SUBMITTED",result.status());assertTrue(result.lateSubmission());assertFalse(result.overdue());
     }
+
+ @Test void departmentManagerAssignsAndReviewsOnlyAsCreator(){manager.setRole("MANAGER");assertEquals("TODO",service.create(new CreateRequest("Task","Report",2L,Instant.now().plusSeconds(500)),"manager").status());task.status="SUBMITTED";task.reportDocument=report;assertEquals("COMPLETED",service.review(8L,new ReviewRequest(task.version,"OK"),true,"manager").status());}
+ @Test void managerCannotAssignAcrossDepartmentsOrWithoutDepartment(){manager.setRole("MANAGER");worker.setDepartment("HR");assertThrows(AccessDeniedException.class,()->service.create(new CreateRequest("Task","Report",2L,Instant.now().plusSeconds(500)),"manager"));manager.setDepartment("Chưa cập nhật");assertThrows(AccessDeniedException.class,()->service.assignees("manager"));}
+ @Test void managerAssigneePickerOnlyContainsOwnDepartmentEmployees(){manager.setRole("MANAGER");other.setDepartment("HR");when(users.findCognitoUsers()).thenReturn(List.of(manager,worker,other));assertEquals(List.of(2L),service.assignees("manager").stream().map(Person::id).toList());}
+ @Test void managerCannotApproveAnotherCreatorsTask(){other.setRole("MANAGER");task.status="SUBMITTED";assertThrows(AccessDeniedException.class,()->service.review(8L,new ReviewRequest(0L,""),true,"other"));}
+
 }

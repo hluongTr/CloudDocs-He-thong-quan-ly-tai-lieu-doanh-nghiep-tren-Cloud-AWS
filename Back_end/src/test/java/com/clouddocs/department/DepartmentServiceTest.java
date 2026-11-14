@@ -1,26 +1,23 @@
 package com.clouddocs.department;
-
-import com.clouddocs.auth.UserRepository;
-import com.clouddocs.document.DocumentRepository;
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
+import com.clouddocs.auth.*;import com.clouddocs.document.*;import com.clouddocs.audit.*;
+import org.junit.jupiter.api.*;import org.springframework.security.access.AccessDeniedException;import org.springframework.test.util.ReflectionTestUtils;
+import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static org.mockito.Mockito.*;import static org.mockito.ArgumentMatchers.*;
 class DepartmentServiceTest {
-    @Test
-    void combinesUserAndDocumentDepartmentsWithoutBlankOrDuplicates() {
-        UserRepository users = mock(UserRepository.class);
-        DocumentRepository documents = mock(DocumentRepository.class);
-        when(users.findDistinctDepartments()).thenReturn(List.of(" Kỹ thuật ", "Nhân sự", ""));
-        when(documents.findDistinctDepartments())
-                .thenReturn(List.of("kỹ thuật", "Marketing", "  "));
+ final UserRepository users=mock(UserRepository.class);final DocumentRepository documents=mock(DocumentRepository.class);final DepartmentRepository departments=mock(DepartmentRepository.class);final AuditLogService audit=mock(AuditLogService.class);
+ final DepartmentService service=new DepartmentService(departments,users,documents,audit);User admin,employee;Department dept;
+ @BeforeEach void setup(){admin=new User();admin.setUsername("admin");admin.setRole("ADMIN");employee=new User();employee.setUsername("worker");employee.setDepartment("Sales");ReflectionTestUtils.setField(employee,"id",2L);when(users.findByUsernameIgnoreCase("admin")).thenReturn(Optional.of(admin));when(users.findByUsernameIgnoreCase("worker")).thenReturn(Optional.of(employee));when(users.findForStorageUpdate(2L)).thenReturn(Optional.of(employee));dept=new Department();ReflectionTestUtils.setField(dept,"id",1L);dept.setName("IT");when(departments.findByNameKey("it")).thenReturn(Optional.of(dept));when(departments.findById(1L)).thenReturn(Optional.of(dept));}
+ @Test void catalogIncludesInactiveForHistoricalFilter(){dept.setActive(false);when(departments.findAllByOrderByNameAsc()).thenReturn(List.of(dept));assertEquals(List.of("IT"),service.findAll());}
+ @Test void employeesCannotManageOrAssign(){assertThrows(AccessDeniedException.class,()->service.create("New",true,"worker"));assertThrows(AccessDeniedException.class,()->service.update(1L,"New",true,true,"worker"));assertThrows(AccessDeniedException.class,()->service.assign(2L,"IT","worker"));verifyNoInteractions(audit);}
+ @Test void duplicateNameAndPlaceholderRejected(){assertThrows(IllegalStateException.class,()->service.create(" IT ",true,"admin"));assertThrows(IllegalArgumentException.class,()->service.create(DepartmentService.UNASSIGNED,true,"admin"));}
+ @Test void employeeOnlyChoosesOptedInActiveDepartment(){assertThrows(AccessDeniedException.class,()->service.profileName(employee,"IT"));dept.setAllowSelfSelection(true);assertEquals("IT",service.profileName(employee,"it"));dept.setActive(false);assertThrows(IllegalStateException.class,()->service.profileName(employee,"IT"));}
+ @Test void unchangedInactiveAssignmentIsRetained(){employee.setDepartment("IT");dept.setActive(false);assertEquals("IT",service.profileName(employee,"IT"));assertEquals("IT",service.documentName("IT","IT"));assertThrows(IllegalStateException.class,()->service.documentName("IT",null));}
+ @Test void renameUpdatesExistingUsersAndDocumentsAndAudits(){service.update(1L,"Engineering",true,false,"admin");verify(users).renameDepartment("IT","Engineering");verify(documents).renameDepartment("IT","Engineering");verify(audit).logInTransaction(eq("admin"),eq("UPDATE_DEPARTMENT"),isNull(),isNull(),contains("Engineering"));}
+ @Test void adminAssignsAndUnassignsEmployees(){service.assign(2L,"IT","admin");assertEquals("IT",employee.getDepartment());service.assign(2L,null,"admin");assertEquals(DepartmentService.UNASSIGNED,employee.getDepartment());}
+ @Test void documentsCannotInventNewDepartment(){assertThrows(IllegalArgumentException.class,()->service.documentName("Made up",null));assertEquals(DepartmentService.UNASSIGNED,service.documentName("",null));}
+ @Test void deletingDepartmentUnassignsReferencesWithoutDeletingFiles(){service.delete(1L,"admin");verify(users).renameDepartment("IT",DepartmentService.UNASSIGNED);verify(documents).renameDepartment("IT",DepartmentService.UNASSIGNED);verify(departments).deleteById(1L);verify(documents,never()).delete(any());verify(audit).logInTransaction(eq("admin"),eq("DELETE_DEPARTMENT"),isNull(),isNull(),contains("IT"));}
+ @Test void employeeCannotDeleteDepartment(){assertThrows(AccessDeniedException.class,()->service.delete(1L,"worker"));verify(departments,never()).deleteById(any());}
+ @Test void disablingPreservesHistoricalAssignments(){service.update(1L,"IT",false,false,"admin");verify(users,never()).renameDepartment(any(),any());verify(documents,never()).renameDepartment(any(),any());assertFalse(dept.isActive());}
 
-        List<String> result = new DepartmentService(users, documents).findAll();
+ @Test void managerCannotMoveSelfToAnotherDepartment(){employee.setRole("MANAGER");dept.setAllowSelfSelection(true);assertThrows(AccessDeniedException.class,()->service.profileName(employee,"IT"));}
 
-        assertEquals(List.of("Kỹ thuật", "Marketing", "Nhân sự"), result);
-    }
 }

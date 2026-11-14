@@ -53,14 +53,16 @@ class AuthProfileTest {
                 .contentType("application/json").content("{\"fullName\":\" \"}"))
                 .andExpect(status().isBadRequest());
     }
+    private final com.clouddocs.department.DepartmentService departments=mock(com.clouddocs.department.DepartmentService.class);
     private final UserRepository users = mock(UserRepository.class);
 
     private final AuthService service =
-            new AuthService(users, mock(AuditLogService.class));
+            new AuthService(users, mock(AuditLogService.class), departments);
     private User user;
 
     @BeforeEach
     void setup() {
+        when(departments.profileName(any(),any())).thenAnswer(call->((String)call.getArgument(1)).trim());
         user = new User();
         ReflectionTestUtils.setField(user, "id", 7L);
         user.setUsername("alice");
