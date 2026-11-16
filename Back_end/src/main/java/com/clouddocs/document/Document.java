@@ -43,6 +43,12 @@ public class Document {
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
 
+    @Column(name = "folder_id")
+    private Long folderId;
+
+    public Long getFolderId() { return folderId; }
+    public void setFolderId(Long folderId) { this.folderId = folderId; }
+
     @Column(nullable = false, length = 100)
     private String department;
 

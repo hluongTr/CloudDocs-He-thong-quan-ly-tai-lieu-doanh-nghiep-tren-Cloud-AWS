@@ -50,6 +50,7 @@ public interface DocumentRepository
             @Param("ownerId") Long ownerId, @Param("documentId") Long documentId);
 
     List<Document> findByOwnerId(Long ownerId);
+    java.util.Optional<Document> findFirstByOwnerIdAndS3KeyStartingWith(Long ownerId, String prefix);
 
     @Query(
             "select distinct d.department from Document d where d.department is not null and trim(d.department) <> ''")

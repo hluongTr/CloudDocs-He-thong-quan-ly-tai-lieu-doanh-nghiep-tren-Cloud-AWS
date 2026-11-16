@@ -13,6 +13,26 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class DocumentOwnerNamesTest {
+    private Document createUploadedDocument(String suppliedDepartment) {
+        when(documents.save(any(Document.class))).thenAnswer(invocation -> {
+            Document saved=invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved,"id",11L);
+            ReflectionTestUtils.setField(saved,"updatedAt",Instant.now());
+            return saved;
+        });
+        service.create(new DocumentDtos.CreateDocumentRequest("report.pdf","Description","report.pdf","PDF",10L,suppliedDepartment),"admin-sub");
+        var captured=org.mockito.ArgumentCaptor.forClass(Document.class);
+        verify(documents).save(captured.capture());return captured.getValue();
+    }
+    @Test void uploadUsesCurrentAccountDepartmentAndIgnoresSpoofedDepartment() {
+        admin.setDepartment("Human Resources");
+        Document uploaded=createUploadedDocument("Finance");
+        assertEquals("Human Resources",uploaded.getDepartment());assertEquals("report.pdf",uploaded.getTitle());
+    }
+    @Test void uploadAcceptsOmittedDepartmentWithUnassignedProfile() {
+        admin.setDepartment(null);
+        assertEquals(com.clouddocs.department.DepartmentService.UNASSIGNED,createUploadedDocument(null).getDepartment());
+    }
     final DocumentRepository documents = mock(DocumentRepository.class);
     final UserRepository users = mock(UserRepository.class);
     final AuditLogRepository audit = mock(AuditLogRepository.class);

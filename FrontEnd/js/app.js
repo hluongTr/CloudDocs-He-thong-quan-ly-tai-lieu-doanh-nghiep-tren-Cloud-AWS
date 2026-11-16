@@ -8,6 +8,7 @@ let bulkBusy = false;
 let currentUser = null;
 let favoriteIds = new Set();
 let currentCollection = [];
+let collectionLoadSequence = 0;
 let activePage = "dashboard";
 let notifications = [];
 let notificationTimer = null;
@@ -483,6 +484,8 @@ function renderDocumentTypes(){const select=document.getElementById('typeFilter'
 function normalize(d) {
   return {
     id: d.id,
+    folderId: d.folderId ?? null,
+    canOrganize: d.canOrganize ?? d.access === 'OWNER',
     name: d.title || d.fileName || (currentSettings.language === "en" ? "Untitled" : "Không tên"),
     type: documentFileType(d.fileName,d.fileType),
     inLibrary:typeof d.inLibrary === "boolean" ? d.inLibrary : ["OWNER","ADMIN"].includes(String(d.access||"").toUpperCase()),
@@ -490,6 +493,7 @@ function normalize(d) {
     dept: d.department || "—",
     updated: d.updatedAt,
     size: formatSize(d.fileSize),
+    sizeBytes: d.fileSize == null ? null : Number(d.fileSize),
     status: (d.status || "ACTIVE").toLowerCase(),
     description: d.description || "",
     fileName: d.fileName || d.title || "",
@@ -502,24 +506,12 @@ function escapeHtml(value) {
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[c],
   );
 }
-function row(d, full = false, selectable = full) {
+function row(d, full = false, selectable = full, context = "documents") {
   const en = currentSettings.language === "en";
-  const status =
-    d.status === "shared"
-      ? en
-        ? "Shared"
-        : "Đã chia sẻ"
-      : d.status === "archived"
-        ? en
-          ? "Archived"
-          : "Lưu trữ"
-        : en
-          ? "Active"
-          : "Hoạt động";
   const access = (d.access || "NONE").toUpperCase();
-  const canShare = currentUser && (access === "ADMIN" || access === "OWNER");
+  const canShare = context === "documents" && currentUser && (access === "ADMIN" || access === "OWNER");
   const canDelete = canShare;
-  const canEdit = ["ADMIN", "OWNER", "EDIT"].includes(access);
+  const canEdit = ["documents", "shared"].includes(context) && ["ADMIN", "OWNER", "EDIT"].includes(access);
   const canDownload = ["ADMIN", "OWNER", "EDIT", "DOWNLOAD"].includes(access);
   const canView = ["ADMIN", "OWNER", "EDIT", "DOWNLOAD", "VIEW"].includes(access);
   const actions = [];
@@ -546,14 +538,15 @@ function row(d, full = false, selectable = full) {
     );
   if (canDelete)
     actions.push(
-      `<button class="delete-btn" onclick="deleteDocument(${d.id})" title="${en ? "Delete document" : "Xóa tài liệu"}">🗑 ${en ? "Delete" : "Xóa"}</button>`,
+      `<button class="delete-btn" onclick="deleteDocument(${d.id})" title="${en ? "Move to trash" : "Chuyển vào thùng rác"}">🗑 ${en ? "Move to trash" : "Chuyển vào thùng rác"}</button>`,
     );
+  if (canView && context === "favorites")
+    actions[0] = `<button class="favorite-btn favorite-label active" onclick="toggleFavorite(${d.id})" title="${en ? "Remove from favorites" : "Bỏ yêu thích"}">★ ${en ? "Remove from favorites" : "Bỏ yêu thích"}</button>`;
   if (!actions.length) actions.push(`<span class="row-dash">—</span>`);
   return `<tr data-id="${d.id}">
-    ${selectable ? `<td><input type="checkbox" class="document-select" ${!canDelete?'disabled title="Không có quyền xóa tài liệu này"':''} aria-label="Chọn tài liệu ${escapeHtml(d.name)}" data-document-id="${d.id}" ${selectedDocumentIds.has(Number(d.id)) ? "checked" : ""} onchange="selectDocument(${d.id},this.checked)"></td>` : ""}
+    ${selectable ? `<td><input type="checkbox" class="document-select" ${!(canDownload||canShare)?'disabled title="Không có quyền xóa tài liệu này"':''} aria-label="Chọn tài liệu ${escapeHtml(d.name)}" data-document-id="${d.id}" ${selectedDocumentIds.has(Number(d.id)) ? "checked" : ""} onchange="selectDocument(${d.id},this.checked)"></td>` : ""}
     <td><div class="file-cell">${fileIcon(d.type)}<span data-no-translate>${escapeHtml(d.name)}</span></div></td>
     <td>${ownerCell(d)}</td><td data-no-translate>${escapeHtml(d.dept)}</td><td>${escapeHtml(formatUpdated(d.updated))}</td><td>${escapeHtml(d.size)}</td>
-    ${full ? `<td><span class="status ${escapeHtml(d.status)}">${status}</span></td>` : ""}
     <td><div class="table-actions">${actions.join("")}</div></td>
   </tr>`;
 }
@@ -603,6 +596,10 @@ function showAuth() {
   document.getElementById("selectedFiles").replaceChildren();
   document.getElementById("uploadDescription").value = "";
   currentUser = null; docs = []; currentCollection = []; favoriteIds.clear(); notifications = [];
+  window.resetFolders?.();
+  window.resetDocumentSort?.();
+  window.resetDocumentPagination?.();
+  window.resetPagedLists?.();
   activePage = "dashboard";
   for (const id of ["dashboardActivity", "recentTable", "collectionTable", "trashTable", "permissionList"]) document.getElementById(id).replaceChildren();
   for (const id of ["statTotalDocuments", "statUploadedMonth", "statDownloads", "storageScope", "storageAccountingNote"]) document.getElementById(id).textContent = "—";
@@ -701,50 +698,86 @@ function updateUserUI() {
       .toUpperCase();
 }
 
+let authPhase = "checking";
+let authGeneration = 0;
+function setAuthPhase(phase) {
+  authPhase = phase;
+  const button = document.getElementById("cognitoLogin");
+  button.disabled = phase !== "ready";
+  button.textContent = phase === "checking" ? "Đang kiểm tra phiên đăng nhập…"
+    : phase === "signing-out" ? "Đang đăng xuất…"
+    : phase === "redirecting" ? "Đang chuyển đến trang đăng nhập…" : "Đăng nhập";
+}
 function authError(error) {
   const element = document.getElementById("loginError");
   element.textContent = error.message || "Không thể kết nối. Vui lòng thử lại.";
   element.classList.remove("hidden");
 }
 async function bootstrapAuth() {
+  const generation = ++authGeneration;
+  setAuthPhase("checking");
   try {
     await CognitoAuth.callback();
+    if (generation !== authGeneration) return;
     if (!getToken()) { showAuth(); return; }
-    currentUser = await api("/auth/me");
+    const user = await api("/auth/me");
+    if (generation !== authGeneration) return;
+    currentUser = user;
     showApp();
     await loadDocuments();
-    await showPage("dashboard");
+    if (generation !== authGeneration) return;
+    await showPage(browserPage(), { historyMode: "replace" });
   } catch (error) {
+    if (generation !== authGeneration) return;
     setToken(null); currentUser = null; showAuth(); authError(error);
+  } finally {
+    if (generation === authGeneration) setAuthPhase("ready");
   }
 }
 document.getElementById("cognitoLogin").onclick = async () => {
   const button = document.getElementById("cognitoLogin");
-  if (button.disabled) return;
-  button.disabled = true; button.textContent = "Đang chuyển đến trang đăng nhập…";
+  if (button.disabled || authPhase !== "ready") return;
+  setAuthPhase("redirecting");
   document.getElementById("loginError").classList.add("hidden");
   try { await CognitoAuth.login(); }
-  catch (error) { authError(error); button.disabled = false; button.textContent = "Đăng nhập"; }
+  catch (error) { authError(error); setAuthPhase("ready"); }
 };
 // Back navigation can restore the disabled button from the browser's page cache.
-window.addEventListener("pageshow", () => {
-  const button = document.getElementById("cognitoLogin");
-  button.disabled = false;
-  button.textContent = "Đăng nhập";
+window.addEventListener("pageshow", event => {
+  if (authPhase === "checking") return;
+  if (event?.persisted) { showAuth(); bootstrapAuth(); return; }
+  if (authPhase !== "signing-out") setAuthPhase("ready");
 });
 document.getElementById("logoutButton").onclick = async () => {
-  try { await api("/auth/logout", {method: "POST"}); } catch {}
+  if (authPhase === "signing-out") return;
+  ++authGeneration;
+  setAuthPhase("signing-out");
+  // Start the audit while the token is still present, then clear local state immediately.
+  const audit = api("/auth/logout", {method: "POST"}).catch(() => {});
   setToken(null); currentUser = null; docs = []; favoriteIds.clear(); currentCollection = [];
   notifications = []; showAuth();
-  try { CognitoAuth.logout(); } catch (error) { authError(error); }
+  setAuthPhase("signing-out");
+  let timeout;
+  try {
+    // A slow/unavailable audit endpoint must not block signing out at Cognito.
+    await Promise.race([audit, new Promise(resolve => { timeout = setTimeout(resolve, 1500); })]);
+    CognitoAuth.logout();
+  } catch (error) { authError(error); setAuthPhase("ready"); }
+  finally { clearTimeout(timeout); }
 };
 
 // Refresh database-backed permissions when returning to the application.
 window.addEventListener("focus", async () => {
-  if (!currentUser || !getToken()) return;
-  try { currentUser = await api("/auth/me"); updateUserUI();
+  if (authPhase !== "ready" || !currentUser || !getToken()) return;
+  const generation = authGeneration, token = getToken();
+  try { const user = await api("/auth/me");
+    if (generation !== authGeneration || token !== getToken()) return;
+    currentUser = user; updateUserUI();
     if (activePage === "users" && currentUser.role !== "ADMIN") await showPage("dashboard");
-  } catch (error) { currentUser = null; showAuth(); authError(error); }
+  } catch (error) {
+    if (generation !== authGeneration || token !== getToken()) return;
+    currentUser = null; showAuth(); authError(error);
+  }
 });
 
 async function loadDashboard() {
@@ -935,6 +968,7 @@ async function loadDocuments() {
   try {
     const [data] = await Promise.all([
       api("/documents"),
+      window.loadFolders?.(),
       loadDepartments(),
       loadFavoriteIds(),
       loadStorageUsage(),
@@ -952,20 +986,25 @@ async function loadDocuments() {
 }
 
 async function loadFavoriteIds() {
+  const sessionToken = getToken();
   try {
     const data = await api("/favorites");
+    if (sessionToken !== getToken()) return;
     favoriteIds = new Set((Array.isArray(data) ? data : []).map(Number));
   } catch (error) {
+    if (sessionToken !== getToken()) return;
     console.error(error);
     favoriteIds = new Set();
   }
 }
 
 window.toggleFavorite = async function (documentId) {
+  const sessionToken = getToken();
   const id = Number(documentId);
   const wasFavorite = favoriteIds.has(id);
   try {
     await api(`/favorites/${id}`, { method: wasFavorite ? "DELETE" : "PUT" });
+    if (sessionToken !== getToken()) return;
     if (wasFavorite) favoriteIds.delete(id);
     else favoriteIds.add(id);
     renderTables();
@@ -977,6 +1016,7 @@ window.toggleFavorite = async function (documentId) {
     }
     showToast(wasFavorite ? "Đã bỏ khỏi danh sách yêu thích." : "Đã thêm vào danh sách yêu thích.");
   } catch (error) {
+    if (sessionToken !== getToken()) return;
     showToast(`Không thể cập nhật yêu thích: ${error.message}`);
   }
 };
@@ -984,9 +1024,12 @@ window.toggleFavorite = async function (documentId) {
 function renderCollection(items, emptyMessage = "Chưa có tài liệu phù hợp.") {
   const table = document.getElementById("collectionTable");
   if (!table) return;
-  table.innerHTML = items.length
-    ? items.map((document) => row(document, true, false)).join("")
+  const visible=window.pageList?.('collection',items,activePage)||items;
+  const ids=new Set(visible.map(d=>Number(d.id)));selectedDocumentIds=new Set([...selectedDocumentIds].filter(id=>ids.has(id)));
+  table.innerHTML = visible.length
+    ? visible.map((document) => row(document, true, true, activePage)).join("")
     : `<tr><td colspan="7" style="text-align:center;padding:40px;color:#9099a8">${escapeHtml(emptyMessage)}</td></tr>`;
+  window.updateCollectionSelection?.();
 }
 
 function favoriteDocuments() {
@@ -996,6 +1039,9 @@ function favoriteDocuments() {
 }
 
 async function loadCollection(page) {
+  const sessionToken = getToken();
+  const sequence = ++collectionLoadSequence;
+  const isCurrent = () => sessionToken === getToken() && sequence === collectionLoadSequence && activePage === page;
   const data = pageNames[page];
   document.getElementById("collectionEyebrow").textContent = data[1];
   document.getElementById("collectionTitle").textContent = data[0];
@@ -1005,14 +1051,17 @@ async function loadCollection(page) {
   table.innerHTML = `<tr><td colspan="7" class="dashboard-loading">Đang tải dữ liệu...</td></tr>`;
   try {
     await loadFavoriteIds();
+    if (!isCurrent()) return;
     if (page === "favorites") {
       await loadDocuments();
+      if (!isCurrent()) return;
       currentCollection = favoriteDocuments();
       renderCollection(currentCollection, "Bạn chưa yêu thích tài liệu nào.");
       return;
     }
     const endpoint = page === "shared" ? "/documents/shared" : "/documents/recent";
     const response = await api(endpoint);
+    if (!isCurrent()) return;
     currentCollection = Array.isArray(response) ? response.map(normalize) : [];
     currentCollection.forEach((document) => {
       const index = docs.findIndex((item) => Number(item.id) === Number(document.id));
@@ -1025,6 +1074,7 @@ async function loadCollection(page) {
         : "Bạn chưa tương tác với tài liệu nào gần đây.";
     renderCollection(currentCollection, empty);
   } catch (error) {
+    if (!isCurrent()) return;
     currentCollection = [];
     renderCollection([], `Không tải được dữ liệu: ${error.message}`);
   }
@@ -1034,6 +1084,7 @@ async function loadCollection(page) {
 // =========================
 
 const activityLabels = {
+  CREATE_FOLDER: "Tạo thư mục", RENAME_FOLDER: "Đổi tên thư mục", DELETE_FOLDER: "Xóa thư mục", MOVE_DOCUMENT: "Chuyển thư mục tài liệu",
   REPLACE_FILE:"Ghi đè tệp", FAVORITE_ADD:"Thêm vào yêu thích", FAVORITE_REMOVE:"Bỏ yêu thích", UPDATE_AVATAR:"Cập nhật ảnh đại diện", DELETE_AVATAR:"Xóa ảnh đại diện", CREATE_DEPARTMENT:"Thêm phòng ban", DELETE_DEPARTMENT:"Xóa phòng ban", UPDATE_DEPARTMENT:"Cập nhật phòng ban", ASSIGN_DEPARTMENT:"Gán phòng ban", TASK_DELETED:"Xóa công việc", TASK_ASSIGNED:"Giao việc", TASK_STARTED: "Bắt đầu công việc", TASK_SUBMITTED: "Nộp báo cáo", TASK_APPROVED: "Duyệt hoàn thành", TASK_CHANGES_REQUESTED: "Yêu cầu sửa báo cáo",
   RESTORE: "Khôi phục tài liệu", PURGE: "Xóa vĩnh viễn", DELETE_NOTIFICATION: "Xóa thông báo",
   LOGIN: "Đăng nhập",
@@ -1049,6 +1100,7 @@ const activityLabels = {
   SEND_NOTIFICATION: "Gửi thông báo",
 };
 const activityLabelsEn = {
+  CREATE_FOLDER: "Create folder", RENAME_FOLDER: "Rename folder", DELETE_FOLDER: "Delete folder", MOVE_DOCUMENT: "Move document",
   REPLACE_FILE:"Replace file", FAVORITE_ADD:"Add to favorites", FAVORITE_REMOVE:"Remove from favorites", UPDATE_AVATAR:"Update avatar", DELETE_AVATAR:"Delete avatar", CREATE_DEPARTMENT:"Create department", DELETE_DEPARTMENT:"Delete department", UPDATE_DEPARTMENT:"Update department", ASSIGN_DEPARTMENT:"Assign department", TASK_DELETED:"Delete task", TASK_ASSIGNED:"Assign task", TASK_STARTED: "Start task", TASK_SUBMITTED: "Submit report", TASK_APPROVED: "Approve task", TASK_CHANGES_REQUESTED: "Request changes",
   RESTORE: "Restore document", PURGE: "Delete permanently", DELETE_NOTIFICATION: "Delete announcement",
   LOGIN: "Sign in",
@@ -1221,7 +1273,7 @@ function renderActivityLogs(logs) {
             </tr>
           </thead>
 
-          <tbody>
+          <tbody id="activityLogTable">
 
             ${logs
               .map((log) => {
@@ -1296,6 +1348,7 @@ function renderActivityLogs(logs) {
   `;
 
   const refreshButton = document.getElementById("refreshActivity");
+  window.paginateRenderedTable?.("activityLogTable", logs.length);
 
   if (refreshButton) {
     refreshButton.onclick = loadActivityLogs;
@@ -1354,7 +1407,7 @@ function renderTables() {
     recent.innerHTML =
       docs
         .slice(0, 5)
-        .map((d) => row(d))
+        .map((d) => row(d, false, false, "dashboard"))
         .join("") ||
       `<tr><td colspan="6" style="text-align:center;padding:40px;color:#9099a8">Chưa có tài liệu.</td></tr>`;
   filterDocs();
@@ -1365,13 +1418,44 @@ async function refreshDocumentPage(button){if(button.disabled)return;const token
 document.getElementById('refreshDocuments').addEventListener('click',event=>refreshDocumentPage(event.currentTarget));
 document.getElementById('refreshCollection').addEventListener('click',event=>refreshDocumentPage(event.currentTarget));
 
+function browserPage() {
+  const hash = window.location?.hash || "";
+  const page = hash.startsWith("#/") ? hash.slice(2) : "dashboard";
+  return Object.prototype.hasOwnProperty.call(pageNames, page) ? page : "dashboard";
+}
+
+function recordBrowserPage(page, mode) {
+  if (!window.history || !window.location?.href) return;
+  const url = new URL(window.location.href);
+  const hash = "#/" + page;
+  if (mode === "push" && url.hash === hash) return;
+  url.hash = hash;
+  const method = mode === "push" ? "pushState" : "replaceState";
+  window.history[method]({ cloudDocsPage: page }, "", url.pathname + url.search + url.hash);
+}
+
+window.addEventListener("popstate", () => {
+  if (!currentUser || !getToken() || authPhase === "signing-out") {
+    showAuth();
+    return;
+  }
+  showPage(browserPage(), { historyMode: "replace" }).catch(error => showToast(error.message));
+});
+
 const pages = document.querySelectorAll(".page");
-async function showPage(page) {
+let pageNavigationSequence = 0;
+async function showPage(page, { historyMode = "push" } = {}) {
+  if (!Object.prototype.hasOwnProperty.call(pageNames, page)) page = "dashboard";
 
   if (["users","departments"].includes(page) && currentUser?.role !== "ADMIN") {
     showToast("Bạn không có quyền quản trị người dùng.");
-    return;
+    if (historyMode === "push") return;
+    page = "dashboard";
   }
+
+  const sequence = ++pageNavigationSequence;
+  const sessionToken = getToken();
+  recordBrowserPage(page, historyMode);
 
   pages.forEach((p) => p.classList.add("hidden"));
   activePage = page;
@@ -1462,6 +1546,8 @@ async function showPage(page) {
     document.getElementById("emptyTitle").textContent = data[0];
   }
 
+  // A previous page request must not restore its menu after a newer navigation/logout.
+  if (sequence !== pageNavigationSequence || activePage !== page || sessionToken !== getToken()) return;
   // Active menu
   document.querySelectorAll(".nav-item").forEach((a) => {
     a.classList.toggle("active", a.dataset.page === page);
@@ -1578,6 +1664,8 @@ async function loadUsers() {
   const sessionToken = getToken();
   const tbody = document.getElementById("userTable");
   if (!tbody) return;
+  const pager = document.getElementById("userTablePager");
+  if (pager) pager.hidden = true;
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px">Đang tải...</td></tr>`;
   try {
     const [users] = await Promise.all([api("/users"),window.fetchDepartmentCatalog?.()]);
@@ -1599,6 +1687,7 @@ async function loadUsers() {
         )
         .join("") ||
       `<tr><td colspan="7" style="text-align:center;padding:30px">Chưa có người dùng.</td></tr>`;
+    window.paginateRenderedTable?.("userTable", users.length);
   } catch (error) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#c53030">${escapeHtml(error.message)}</td></tr>`;
   }
@@ -1834,13 +1923,14 @@ window.downloadDocument = async function (id) {
   }
 };
 window.deleteDocument = async function (id) {
+  if (activePage !== "documents") return;
   const doc = docs.find((x) => Number(x.id) === Number(id));
   if (!doc) return;
   const ok = confirm(`Chuyển tài liệu "${doc.name}" vào thùng rác? Bạn có thể khôi phục lại sau.`);
   if (!ok) return;
   try {
     await api(`/documents/${id}`, { method: "DELETE" });
-    showToast("Đã xóa tài liệu.");
+    showToast("Đã chuyển tài liệu vào thùng rác.");
     await loadDocuments();
     await loadDashboard();
     if (["shared", "recent", "favorites"].includes(activePage)) await loadCollection(activePage);
@@ -1893,7 +1983,7 @@ document.getElementById('saveEdit').onclick=saveEditedDocument;
 document.getElementById('editModal').addEventListener('click',event=>{if(event.target.id==='editModal')closeEditModal();});
 
 const modal = document.getElementById("uploadModal");
-const openUpload = () => modal.classList.remove("hidden");
+const openUpload = async () => { if (window.prepareUploadFolders && !await window.prepareUploadFolders()) return; modal.classList.remove("hidden"); };
 document.getElementById("openUpload").onclick = openUpload;
 document.getElementById("openUpload2").onclick = openUpload;
 document.getElementById("closeUpload").onclick = () => modal.classList.add("hidden");
@@ -1909,91 +1999,23 @@ fileInput.addEventListener("change", () => {
     .join("");
 });
 document.getElementById("confirmUpload").onclick = async () => {
-  if (!fileInput.files.length) {
-    showToast("Hãy chọn ít nhất một file.");
-    return;
-  }
-  const department = document.getElementById("uploadDepartment").value,
-    description = document.getElementById("uploadDescription").value.trim(),
-    button = document.getElementById("confirmUpload");
-  if (button.disabled) return;
-  const uploadToken = getToken();
-  const files = [...fileInput.files];
-  button.disabled = true;
-  button.textContent = "Đang lưu...";
-  try {
-    const quota = await loadStorageUsage();
-    requireSession(uploadToken);
-    if (quota) {
-      if (files.some((file) => file.size > quota.maxFileBytes)) {
-        throw new Error(`File vượt giới hạn ${formatSize(quota.maxFileBytes)}/file.`);
-      }
-      if (files.reduce((sum, file) => sum + file.size, 0) > quota.remainingBytes) {
-        throw new Error(
-          "Không đủ dung lượng cho các file đã chọn. Hãy xóa tài liệu không cần thiết.",
-        );
-      }
+  if(!fileInput.files.length)return showToast('Hãy chọn ít nhất một tệp.');
+  const button=document.getElementById('confirmUpload');if(button.disabled)return;
+  const token=getToken(),files=[...fileInput.files],description=document.getElementById('uploadDescription').value.trim(),folderId=window.getUploadFolderId?.()??null;
+  const controls=[button,fileInput,document.getElementById('closeUpload'),document.getElementById('cancelUpload')];
+  controls.forEach(node=>node.disabled=true);
+  try{
+    const result=await window.uploadDocumentBatch(files,description,folderId,token,(index,total)=>button.textContent='Đang tải '+index+'/'+total+'...');
+    requireSession(token);
+    if(result.failed.length){
+      selected.innerHTML=result.failed.map(({file,message})=>'<div class="selected-file"><span>'+escapeHtml(file.name)+'</span><span>'+escapeHtml(message)+'</span></div>').join('');
+      showToast(result.success.length+'/'+files.length+' tệp thành công; '+result.failed.length+' tệp lỗi. Bấm Lưu để thử lại các tệp lỗi.');
+    }else{
+      modal.classList.add('hidden');fileInput.value='';selected.innerHTML='';document.getElementById('uploadDescription').value='';showToast(files.length+' tài liệu đã được lưu thành công.');
     }
-    for (const file of files) {
-      requireSession(uploadToken);
-      const dot = file.name.lastIndexOf("."),
-        ext = dot > -1 ? file.name.slice(dot + 1).toUpperCase() : "FILE";
-      // 1. Tạo document trong MySQL
-      const created = await api("/documents", {
-        method: "POST",
-        body: JSON.stringify({
-          title: file.name,
-          description,
-          fileName: file.name,
-          fileType: ext,
-          fileSize: file.size,
-          department,
-        }),
-      });
-
-      // 2. Xin Presigned Upload URL từ backend
-      requireSession(uploadToken);
-      const uploadInfo = await api(`/documents/${created.id}/upload-url`, {
-        method: "POST",
-      });
-
-
-
-      // 3. Upload file trực tiếp lên S3
-      requireSession(uploadToken);
-      const s3Response = await fetch(uploadInfo.uploadUrl, {
-        method: "PUT",
-        body: file,
-      });
-
-      if (!s3Response.ok) {
-        throw new Error(`Upload lên S3 thất bại: HTTP ${s3Response.status}`);
-      }
-
-      // 4. Báo backend xác nhận upload hoàn tất
-      requireSession(uploadToken);
-      await api(`/documents/${created.id}/upload-complete`, {
-        method: "POST",
-      });
-
-      console.log("Upload S3 thành công:", created.id);
-    }
-    showToast(`${files.length} tài liệu đã được lưu thành công.`);
-    modal.classList.add("hidden");
-    fileInput.value = "";
-    selected.innerHTML = "";
-    document.getElementById("uploadDescription").value = "";
-    await loadDocuments();
-    await loadDashboard();
-    showPage("documents");
-  } catch (error) {
-    console.error(error);
-    showToast(`Lưu thất bại: ${error.message}`);
-  } finally {
-    button.disabled = false;
-    button.textContent = "Lưu tài liệu";
-    await loadStorageUsage();
-  }
+    await loadDocuments();requireSession(token);await loadDashboard();requireSession(token);
+  }catch(error){if(token===getToken())showToast('Lưu thất bại: '+error.message);}
+  finally{controls.forEach(node=>node.disabled=false);button.textContent='Lưu tài liệu';if(token===getToken())await loadStorageUsage();}
 };
 function showToast(msg) {
   const t = document.getElementById("toast");
@@ -2010,17 +2032,23 @@ function filterDocs() {
   const q = (search.value || "").toLowerCase(),
     type = typeFilter.value,
     department = departmentFilter?.value || "";
-  const filtered = docs.filter(libraryDocument).filter(
+  window.renderFolders?.();
+  let filtered = docs.filter(libraryDocument).filter(d => !window.documentInCurrentFolder || window.documentInCurrentFolder(d, q)).filter(
     (d) =>
       (!q || `${d.name} ${d.owner} ${d.dept}`.toLowerCase().includes(q)) &&
       (!type || d.type === type) &&
       (!department || d.dept.localeCompare(department, "vi", { sensitivity: "accent" }) === 0),
   );
-  const visibleIds = new Set(filtered.map(d => Number(d.id)));
+  filtered = window.sortDocumentItems?.(filtered) || filtered;
+  const folderItems = window.folderTableRows?.(q, department, true) || [];
+  const combined = [...folderItems.map(html => ({html})), ...filtered.map(document => ({document}))];
+  const scope = JSON.stringify([q,type,department,window.getCurrentFolderId?.(),window.documentSortKey?.()]);
+  const pageRows = window.paginateDocumentRows?.(combined, scope) || combined;
+  const visibleIds = new Set(pageRows.filter(item=>item.document).map(item=>Number(item.document.id)));
   selectedDocumentIds = new Set([...selectedDocumentIds].filter(id => visibleIds.has(id)));
-  document.getElementById("documentTable").innerHTML = filtered.length
-    ? filtered.map((d) => row(d, true)).join("")
-    : `<tr><td colspan="8" style="text-align:center;padding:40px;color:#9099a8">Không tìm thấy tài liệu phù hợp.</td></tr>`;
+  document.getElementById("documentTable").innerHTML = pageRows.length
+    ? pageRows.map(item=>item.document?row(item.document,true):item.html).join('')
+    : `<tr><td colspan="7" style="text-align:center;padding:40px;color:#9099a8">Không tìm thấy tài liệu phù hợp.</td></tr>`;
   updateBulkToolbar();
 }
 search.addEventListener("input", () => { selectedDocumentIds.clear(); filterDocs(); updateBulkToolbar(); });
@@ -2410,6 +2438,7 @@ function updateBulkToolbar() {
   const all = document.getElementById("selectAllDocuments");
   all.checked = visible.length > 0 && visible.every(input => selectedDocumentIds.has(Number(input.dataset.documentId)));
   all.indeterminate = !all.checked && visible.some(input => selectedDocumentIds.has(Number(input.dataset.documentId)));
+  window.updateCollectionSelection?.();
 }
 window.selectAllDocuments = function(checked) {
   document.querySelectorAll("#documentTable .document-select").forEach(input => {
@@ -2432,6 +2461,8 @@ async function runDocumentBatch(ids, action, label) {
   return { failed };
 }
 window.bulkDocuments = async function(action) {
+  if (!["download", "share", "delete"].includes(action)) return;
+  if (action !== "download" && activePage !== "documents") return;
   if (bulkBusy || !selectedDocumentIds.size) return;
   const ids = [...selectedDocumentIds];
   const chosen = docs.filter(d => ids.includes(Number(d.id)));
@@ -2442,9 +2473,9 @@ window.bulkDocuments = async function(action) {
   bulkBusy = true; updateBulkToolbar();
   try {
     const result = await runDocumentBatch(ids, id => action === "download" ? downloadDocument(id) : api(`/documents/${id}`, {method: "DELETE"}), action === "download" ? "Tải xuống" : "Chuyển vào thùng rác");
-    if (action === "delete") await loadDocuments();
+    if (action === "delete") {await loadDocuments();if(['shared','recent','favorites'].includes(activePage))await loadCollection(activePage);}
     selectedDocumentIds = new Set(result.failed);
-    filterDocs();
+    if(['shared','recent','favorites'].includes(activePage))renderCollection(currentCollection);else filterDocs();
   } finally { bulkBusy = false; updateBulkToolbar(); }
 };
 async function loadTrash() {
@@ -2462,21 +2493,23 @@ async function loadTrash() {
   }
 }
 function renderTrash() {
-  document.getElementById("trashTable").innerHTML = trashDocuments.map(d => `<tr>
+  const visible=window.pageList?.('trash',trashDocuments)||trashDocuments;
+  const ids=new Set(visible.map(d=>Number(d.id)));selectedTrashIds=new Set([...selectedTrashIds].filter(id=>ids.has(id)));
+  document.getElementById("trashTable").innerHTML = visible.map(d => `<tr>
     <td><input type="checkbox" aria-label="Chọn ${escapeHtml(d.name)}" ${selectedTrashIds.has(Number(d.id)) ? "checked" : ""} onchange="selectTrash(${d.id},this.checked)"></td>
     <td data-no-translate>${escapeHtml(d.name)}</td><td>${escapeHtml(d.size)}</td><td>${escapeHtml(formatUpdated(d.updated))}</td>
     <td class="table-actions"><button class="secondary-btn" onclick="trashAction('restore',[${d.id}])">Khôi phục</button><button class="danger-btn" onclick="trashAction('purge',[${d.id}])">Xóa vĩnh viễn</button></td></tr>`).join("") || '<tr><td colspan="5" class="trash-empty">Thùng rác trống.</td></tr>';
   document.getElementById("trashSelectionCount").textContent = "Đã chọn " + selectedTrashIds.size;
   for (const id of ["restoreSelected", "purgeSelected"]) document.getElementById(id).disabled = bulkBusy || !selectedTrashIds.size;
   const all = document.getElementById("selectAllTrash");
-  all.checked = trashDocuments.length > 0 && selectedTrashIds.size === trashDocuments.length;
+  all.checked = visible.length > 0 && selectedTrashIds.size === visible.length;
   all.indeterminate = selectedTrashIds.size > 0 && !all.checked;
 }
 window.selectTrash = function(id, checked) {
   checked ? selectedTrashIds.add(Number(id)) : selectedTrashIds.delete(Number(id)); renderTrash();
 };
 window.selectAllTrash = function(checked) {
-  selectedTrashIds = new Set(checked ? trashDocuments.map(d => Number(d.id)) : []); renderTrash();
+  selectedTrashIds = new Set(checked ? (window.listPageItems?.('trash')||trashDocuments).map(d => Number(d.id)) : []); renderTrash();
 };
 window.trashAction = async function(action, ids = [...selectedTrashIds]) {
   if (bulkBusy || !ids.length) return;

@@ -4,22 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CloudDocs — Quản lý tài liệu doanh nghiệp</title>
-    <link rel="icon" type="image/png" href="assets/clouddocs-logo.png?v=20261114-sent-toolbar" />
-    <link rel="apple-touch-icon" href="assets/clouddocs-logo.png?v=20261114-sent-toolbar" />
-    <link rel="stylesheet" href="css/style.css?v=20261114-sent-toolbar" />
-    <link rel="stylesheet" href="css/motion.css?v=20261114-sent-toolbar" />
+    <link rel="icon" type="image/png" href="assets/clouddocs-logo.png?v=20261115-all-pages" />
+    <link rel="apple-touch-icon" href="assets/clouddocs-logo.png?v=20261115-all-pages" />
+    <link rel="stylesheet" href="css/style.css?v=20261116-favorite-layout" />
+    <link rel="stylesheet" href="css/motion.css?v=20261115-all-pages" />
   </head>
   <body>
     <div id="authScreen" class="auth-screen">
       <main class="auth-card">
         <div class="auth-brand">
-          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261114-sent-toolbar" width="50" height="50" alt="Logo CloudDocs" decoding="async" />
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261115-all-pages" width="50" height="50" alt="Logo CloudDocs" decoding="async" />
           <div><strong>CloudDocs</strong><span>ENTERPRISE CLOUD</span></div>
         </div>
         <h1>Hệ thống quản lý<span>tài liệu doanh nghiệp</span></h1>
         <p class="auth-muted">Lưu trữ tập trung. Chia sẻ thuận tiện.</p>
         <div class="auth-divider" aria-hidden="true"></div>
-        <button id="cognitoLogin" class="primary-btn auth-submit" type="button">Đăng nhập</button>
+        <button id="cognitoLogin" class="primary-btn auth-submit" type="button" disabled>Đăng nhập</button>
         <p id="loginError" class="auth-error hidden" role="alert" aria-live="polite"></p>
       </main>
     </div>
@@ -27,7 +27,7 @@
     <div class="app-shell hidden" id="appShell">
       <aside class="sidebar">
         <a class="brand" href="#" data-page="dashboard" aria-label="CloudDocs - Tổng quan">
-          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261114-sent-toolbar" width="38" height="38" alt="Logo CloudDocs" decoding="async" />
+          <img class="brand-icon" src="assets/clouddocs-logo.png?v=20261115-all-pages" width="38" height="38" alt="Logo CloudDocs" decoding="async" />
           <div>
             <strong>CloudDocs</strong>
             <span>Enterprise Cloud</span>
@@ -277,13 +277,12 @@
                 <table>
                   <thead>
                     <tr><th><input id="selectAllDocuments" type="checkbox" aria-label="Chọn tất cả tài liệu đang hiển thị" onchange="selectAllDocuments(this.checked)"></th>
-                      <th>TÊN TÀI LIỆU</th>
+                      <th aria-sort="none"><button type="button" class="column-sort" data-document-sort="name">TÊN ↕</button></th>
                       <th>NGƯỜI SỞ HỮU</th>
                       <th>PHÒNG BAN</th>
-                      <th>CẬP NHẬT</th>
-                      <th>DUNG LƯỢNG</th>
-                      <th>TRẠNG THÁI</th>
-                      <th></th>
+                      <th aria-sort="none"><button type="button" class="column-sort" data-document-sort="updated">CẬP NHẬT ↕</button></th>
+                      <th aria-sort="none"><button type="button" class="column-sort" data-document-sort="size">DUNG LƯỢNG / SỐ MỤC ↕</button></th>
+                      <th>THAO TÁC</th>
                     </tr>
                   </thead>
                   <tbody id="documentTable"></tbody>
@@ -640,7 +639,7 @@
           <div>
             <h2>Thêm tài liệu</h2>
             <p>
-              Chọn tài liệu, phòng ban và thêm mô tả trước khi tải lên.
+              Chọn tài liệu và thêm mô tả trước khi tải lên.
             </p>
           </div>
           <button class="close" id="closeUpload">×</button>
@@ -654,16 +653,7 @@
         <div
           class="upload-metadata"
         >
-          <label
-            style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5d6675;font-weight:600;"
-            >Phòng ban
-            <select
-              id="uploadDepartment"
-              style="padding:10px 12px;border:1px solid #d7deeb;border-radius:10px;background:#fff;color:#202938;"
-            >
-              <option value="">Đang tải phòng ban...</option>
-            </select>
-          </label>
+
           <label
             style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#5d6675;font-weight:600;"
             >Mô tả
@@ -748,12 +738,17 @@
 <div id="workTaskCreateModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskCreateTitle"><div class="modal-head"><h2 id="workTaskCreateTitle">Giao công việc mới</h2><button type="button" class="close" id="closeWorkTaskCreate" aria-label="Đóng">×</button></div><form id="workTaskCreateForm"><div class="work-form-body"><label>Tên công việc<input id="workTaskTitle" required maxlength="255" placeholder="Ví dụ: Báo cáo tình hình sử dụng tài liệu" /></label><label>Yêu cầu<textarea id="workTaskDescription" required maxlength="2000" rows="4" placeholder="Nội dung, kết quả cần đạt, định dạng báo cáo..."></textarea></label><label>Người thực hiện<select id="workTaskAssignee" required></select></label><label>Hạn nộp<input id="workTaskDue" type="datetime-local" required /></label><p id="workTaskCreateError" class="work-error" role="alert"></p></div><div class="modal-actions"><button type="button" class="secondary-btn" id="cancelWorkTaskCreate">Hủy</button><button type="submit" class="primary-btn" id="confirmWorkTaskCreate">Giao việc</button></div></form></div></div>
 <div id="workTaskDetailModal" class="modal-backdrop hidden"><div class="modal work-modal" role="dialog" aria-modal="true" aria-labelledby="workTaskDetailTitle"><div class="modal-head"><h2 id="workTaskDetailTitle">Chi tiết công việc</h2><button type="button" class="close" id="closeWorkTaskDetail" aria-label="Đóng">×</button></div><div class="work-form-body" id="workTaskDetailContent"></div></div></div>
 
-    <script src="js/cognito-config.js?v=20261114-sent-toolbar"></script>
-    <script src="js/cognito-auth.js?v=20261114-sent-toolbar"></script>
-    <script src="js/app.js?v=20261114-sent-toolbar"></script>
-    <script src="js/sent-shares.js?v=20261114-sent-toolbar"></script>
-    <script src="js/profile-extras.js?v=20261114-sent-toolbar"></script>
-    <script src="js/storage-management.js?v=20261114-sent-toolbar"></script>
-<script src="js/work-tasks.js?v=20261114-sent-toolbar"></script>
+    <script src="js/cognito-config.js?v=20261115-all-pages"></script>
+    <script src="js/cognito-auth.js?v=20261115-all-pages"></script>
+    <script src="js/app.js?v=20261116-browser-navigation"></script>
+    <script src="js/list-pagination.js?v=20261116-collection-actions"></script>
+    <script src="js/document-upload.js?v=20261115-all-pages"></script>
+    <script src="js/document-pagination.js?v=20261115-all-pages"></script>
+    <script src="js/document-sort.js?v=20261115-all-pages"></script>
+    <script src="js/folders.js?v=20261115-all-pages"></script>
+    <script src="js/sent-shares.js?v=20261115-all-pages"></script>
+    <script src="js/profile-extras.js?v=20261115-all-pages"></script>
+    <script src="js/storage-management.js?v=20261115-all-pages"></script>
+<script src="js/work-tasks.js?v=20261115-all-pages"></script>
   </body>
 </html>

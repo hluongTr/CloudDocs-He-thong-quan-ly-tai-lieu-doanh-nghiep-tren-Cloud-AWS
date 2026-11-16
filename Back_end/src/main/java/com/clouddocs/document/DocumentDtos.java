@@ -15,7 +15,7 @@ public final class DocumentDtos {
             @NotBlank @Size(max = 255) @Pattern(regexp = "[^\\r\\n\\x00]+") String fileName,
             @NotBlank @Size(max = 50) @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9_-]{0,49}") String fileType,
             @NotNull @PositiveOrZero Long fileSize,
-            @NotBlank @Size(max = 100) String department) {}
+            @Size(max = 100) String department) {}
 
     public record UpdateDocumentRequest(
             @NotBlank @Size(max = 255) String title,
@@ -34,7 +34,13 @@ public final class DocumentDtos {
             String department,
             String status,
             String updatedAt,
-            String access,boolean inLibrary) {
+            String access,boolean inLibrary, Long folderId, boolean canOrganize) {
+        public DocumentResponse(Long id,String title,String description,String fileName,String fileType,Long fileSize,String owner,String department,String status,String updatedAt,String access,boolean inLibrary,Long folderId){
+            this(id,title,description,fileName,fileType,fileSize,owner,department,status,updatedAt,access,inLibrary,folderId,"OWNER".equals(access));
+        }
+        public DocumentResponse(Long id,String title,String description,String fileName,String fileType,Long fileSize,String owner,String department,String status,String updatedAt,String access,boolean inLibrary){
+            this(id,title,description,fileName,fileType,fileSize,owner,department,status,updatedAt,access,inLibrary,null);
+        }
         public DocumentResponse(Long id,String title,String description,String fileName,String fileType,Long fileSize,String owner,String department,String status,String updatedAt,String access){
             this(id,title,description,fileName,fileType,fileSize,owner,department,status,updatedAt,access,"OWNER".equals(access)||"ADMIN".equals(access));
         }

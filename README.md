@@ -21,11 +21,42 @@ Quản lý tài liệu, chia sẻ nội bộ và giao việc theo phòng ban tr�
 
 ## Chức năng đã triển khai
 
+Công việc, Thùng rác, Được chia sẻ, Đã chia sẻ, Gần đây và Yêu thích đều có phân trang giao diện 20 dòng/trang, sau tìm kiếm/lọc/sắp xếp. Người dùng và Nhật ký hoạt động cũng phân trang 20 dòng khi có nhiều hơn 20 bản ghi. Chọn tất cả chỉ áp dụng cho các dòng được phép thao tác trên trang đang xem. Đã chia sẻ chọn theo từng quyền cấp/người nhận và hỗ trợ thu hồi hàng loạt. Tổng quan chỉ hiển thị tối đa 5 tài liệu và 5 hoạt động gần nhất, có nút “Xem tất cả”, không phân trang.
+
+### Thao tác theo từng trang
+
+Điều hướng giữa các mục dùng địa chỉ dạng `index.html#/documents`, `#/favorites`, `#/profile`… Nút Quay lại/Tiến tới của trình duyệt quay giữa các mục đã mở; tải lại hoặc mở trực tiếp URL sẽ khôi phục mục tương ứng khi phiên đăng nhập còn hợp lệ. Bấm lại cùng mục không tạo lịch sử trùng. Cơ chế này hoạt động cả local lẫn EC2, không cần cấu hình rewrite đường dẫn cho web server. Quyền truy cập vẫn được kiểm tra; USER không mở được mục quản trị qua URL hoặc lịch sử cũ. URL chỉ lưu mục điều hướng, chưa lưu bộ lọc, số trang hay thư mục con.
+
+Quy tắc giao diện áp dụng thống nhất cho ADMIN, MANAGER và USER; quyền trên từng tài liệu vẫn do backend kiểm tra.
+
+| Trang | Thao tác |
+| --- | --- |
+| Tài liệu | Xem trước, tải xuống, yêu thích; sửa theo quyền; chủ sở hữu/ADMIN chia sẻ và chuyển vào thùng rác, từng tệp hoặc hàng loạt. |
+| Gần đây | Xem trước, tải xuống theo quyền, thêm/bỏ yêu thích; không xóa hoặc chia sẻ hàng loạt. |
+| Yêu thích | Bỏ yêu thích, xem trước và tải xuống theo quyền; bỏ yêu thích không xóa tài liệu. |
+| Được chia sẻ | Xem trước, tải xuống và sửa theo quyền; không xóa tệp gốc hoặc chia sẻ tiếp. |
+| Tổng quan | Yêu thích, xem trước và tải xuống theo quyền; mở danh sách đầy đủ qua “Xem tất cả”. |
+| Thùng rác | Khôi phục hoặc xóa vĩnh viễn theo quyền, từng tệp hoặc hàng loạt. |
+
+Các bộ sưu tập hỗ trợ tải xuống hàng loạt khi mọi tệp được chọn đều có quyền tải. Phân trang thực hiện trên dữ liệu đã tải về trình duyệt, không phải phân trang truy vấn database. Đổi bộ lọc/phạm vi sẽ đưa về trang đầu; khi danh sách thu nhỏ, trang hiện tại được giới hạn về trang còn tồn tại. Nút “Bỏ yêu thích” tự giãn theo nội dung; các trang bộ sưu tập chỉ nhận kết quả tải mới nhất trong đúng phiên đăng nhập.
+
+Upload dùng `POST /api/documents/upload` với multipart `file`, `metadata`, `requestId` (UUID) và `folderId` tùy chọn. Backend chỉ commit metadata sau khi S3 đã tải/xác nhận thành công; lỗi làm rollback và thử dọn object của lần tải. Mã lần tải theo tài khoản giúp thử lại sau mất phản hồi mà không tạo bản trùng. Giao diện chỉ thử lại các tệp chưa thành công. Hai API tạo metadata riêng và lấy presigned upload URL cũ trả lỗi yêu cầu tải lại trang. Không tự xóa các bản ghi lỗi cũ vì chưa kiểm tra được tệp S3 tương ứng.
+
+Bảng Tài liệu không hiển thị cột trạng thái. Phân trang giao diện 20 mục/trang cho cả thư mục và tệp, sau tìm kiếm/lọc/sắp xếp; chọn tất cả chỉ áp dụng cho tệp trên trang hiện tại. Backend hiện vẫn trả danh sách đầy đủ. Trạng thái nội bộ phục vụ thùng rác và nghiệp vụ vẫn được giữ.
+
+Hộp tải lên chỉ cần tệp và mô tả tùy chọn. Phòng ban được backend lấy từ hồ sơ tài khoản; tên tệp giữ nguyên. Vị trí tải lên là thư mục đang mở của chính tài khoản, hoặc thư mục gốc nếu đang duyệt thư mục người khác.
+
+Tiêu đề cột Tài liệu hỗ trợ sắp xếp luân phiên: tên A–Z/mặc định, ngày mới nhất/cũ nhất/mặc định, dung lượng lớn nhất/nhỏ nhất/mặc định. Thư mục luôn đứng trước tệp; dung lượng thư mục sắp theo số mục. Sắp xếp không thay đổi trạng thái hay dữ liệu đã lưu.
+
+Trong mục Tài liệu, thư mục và tệp dùng chung một bảng: thư mục đứng trước, có biểu tượng 📁 và số mục trực tiếp bên trong. Tìm kiếm/phòng ban áp dụng cho cả hai; bộ lọc định dạng chỉ áp dụng cho tệp. Đường dẫn thư mục nằm trên bảng. Cột cập nhật của thư mục hiển thị lần cập nhật tệp trực tiếp gần nhất, hoặc dấu gạch nếu chưa có dữ liệu.
+
+**Thư mục tài liệu:** tạo thư mục và thư mục con, đổi tên, chuyển một/nhiều tệp, tự tải vào thư mục đang mở và điều hướng bằng đường dẫn. Mỗi tài khoản quản lý cây thư mục của mình; quyền xem theo phòng ban/chia sẻ không cấp quyền sắp xếp tệp của người khác. Di chuyển giữ nguyên S3 key, quyền chia sẻ và yêu thích. Xóa thư mục đưa tệp trong toàn bộ cây con vào thùng rác; khôi phục từng tệp về thư mục gốc. Nếu có báo cáo đang được bảo vệ khỏi xóa, toàn bộ thao tác bị hủy.
+
 | Nhóm | Chức năng |
 | --- | --- |
 | Đăng nhập, hồ sơ | Cognito Authorization Code + PKCE; hiển thị họ tên; cập nhật hồ sơ; avatar JPG/PNG tối đa 5 MiB, chuẩn hóa ảnh vuông 256 × 256. |
 | Tài liệu | Upload tối đa 100 MiB/tệp; tự nhận diện định dạng; tìm kiếm, lọc, xem trước, tải xuống; sửa tên/mô tả và tùy chọn ghi đè nội dung. |
-| Chọn nhiều | Chia sẻ, tải xuống, chuyển thùng rác; xử lý kết quả từng tệp khi có lỗi một phần. |
+| Chọn nhiều | Tài liệu: chia sẻ, tải xuống, chuyển thùng rác; các bộ sưu tập chỉ tải xuống. Xử lý kết quả từng tệp khi có lỗi một phần. |
 | Chia sẻ | Quyền xem/tải/chỉnh sửa; trang Được chia sẻ và Đã chia sẻ; thống kê người nhận, phòng ban, quyền; đổi hoặc thu hồi quyền trực tiếp. |
 | Thùng rác | Xóa mềm, khôi phục và xóa vĩnh viễn một/nhiều tài liệu; lưu lịch sử thao tác. |
 | Bộ sưu tập | Tài liệu gần đây, yêu thích; ghi nhật ký thêm/bỏ yêu thích. |
@@ -36,6 +67,14 @@ Quản lý tài liệu, chia sẻ nội bộ và giao việc theo phòng ban tr�
 | Giao diện | Responsive; tìm kiếm bằng nút Tìm/Enter; làm mới danh sách; logo dẫn về tổng quan. |
 
 ## Phân quyền
+
+### Đăng nhập và đăng xuất
+
+Giao diện khóa nút Đăng nhập khi đang kiểm tra phiên hoặc chuyển hướng; chỉ mở nút sau khi kiểm tra xong. Đăng xuất xóa phiên và dữ liệu hiển thị của CloudDocs ngay, cố gắng ghi nhật ký tối đa 1,5 giây rồi chuyển trình duyệt qua `/logout` của Cognito để xóa cookie đăng nhập tại đó. Trong lúc này không thể bấm Đăng nhập lại. Phản hồi kiểm tra phiên cũ không được mở lại ứng dụng sau đăng xuất. Khi quay lại bằng nút Back của trình duyệt, ứng dụng kiểm tra phiên trước khi cho thao tác.
+
+Việc mở lại website khi phiên CloudDocs vẫn còn hiệu lực có thể khôi phục tài khoản mà không nhập lại mật khẩu. Phiên CloudDocs và cookie đăng nhập Cognito là hai phần khác nhau; không coi việc chỉ xóa token local là đăng xuất Cognito hoàn tất.
+
+Admin xem được cây thư mục của mọi tài khoản, kèm tên chủ sở hữu, và được đổi tên/xóa thư mục người khác. Tạo thư mục, vị trí upload và sắp xếp tệp vẫn theo chủ sở hữu. Xóa thư mục đưa tệp vào thùng rác, chưa hỗ trợ khôi phục nguyên cây thư mục. USER và MANAGER chỉ nhận danh sách thư mục của chính mình; quyền xem tài liệu cùng phòng của MANAGER vẫn áp dụng độc lập.
 
 | Phạm vi | USER | MANAGER | ADMIN |
 | --- | --- | --- | --- |
@@ -61,13 +100,15 @@ Chủ sở hữu/admin quản lý chia sẻ và thùng rác. VIEW cho xem trư�
 flowchart TD
     Web["Trình duyệt"] -->|REST API| API["Spring Boot / EC2"]
     Web <-->|Code + PKCE| Auth["Amazon Cognito"]
-    Web <-->|URL ký trước| S3["S3 riêng tư"]
+    Web -->|Upload multipart và ghi đè| API
+    API -->|Upload và xác nhận đối tượng| S3["S3 riêng tư"]
+    Web <-->|GET ký trước: xem và tải| S3
     API -->|Metadata và quyền| DB["MySQL / RDS"]
     API -->|Xác minh token| Auth
     API -->|Kiểm tra và quản lý tệp| S3
 ```
 
-Upload thông thường đi trực tiếp tới S3 bằng URL ký trước; backend xác nhận đối tượng trước khi hoàn tất. Ghi đè đi qua backend, dùng khóa S3 mới, giữ ID/chủ sở hữu/quyền/yêu thích. Avatar lưu trong database.
+Upload thông thường và ghi đè đều đi qua backend; trình duyệt không còn PUT trực tiếp lên S3 trong luồng upload hiện tại. Upload mới dùng một giao dịch database, khóa S3 riêng theo từng lần thử và xác nhận đối tượng trước khi commit. Ghi đè giữ ID/chủ sở hữu/quyền/yêu thích. Avatar lưu trong database. Upload không phụ thuộc CORS của S3; xem trước/tải xuống trực tiếp bằng URL ký trước vẫn cần CORS phù hợp. Proxy phải cho phép multipart tối đa 101 MiB (100 MiB/tệp cộng phần dữ liệu biểu mẫu). Database và S3 không có giao dịch phân tán: nếu dọn object thất bại, cần kiểm tra object sót theo log.
 
 ## Cấu trúc dự án
 
@@ -144,6 +185,9 @@ Sao lưu, kiểm tra database đích và chỉ chạy migration thiếu sau khi 
 | 05 | [Email tùy chọn](Back_end/db/migration/05_APPLY_optional_contact_email.sql) |
 | 06 | [Công việc](Back_end/db/migration/06_APPLY_work_tasks.sql) |
 | 07 | [Phòng ban và avatar](Back_end/db/migration/07_APPLY_departments_avatars.sql) |
+| 08 | [Thư mục tài liệu](Back_end/db/migration/08_APPLY_document_folders.sql) |
+
+Chức năng thư mục yêu cầu chạy migration 08 một lần trước khi khởi động bản backend mới. Tài liệu cũ mặc định ở thư mục gốc. API thư mục: `GET/POST /api/folders`, `PUT/DELETE /api/folders/{id}`, `POST /api/folders/move` (danh sách `documentIds` và `folderId`; `null` là thư mục gốc). Migration 08 khác script dọn audit tùy chọn trong thư mục `Back_end/db`.
 
 Trưởng phòng, Đã chia sẻ, ghi đè tệp không cần migration sau 07. Giữ [chẩn đoán hồ sơ/dung lượng](Back_end/db/diagnose-profile-storage.sql) và [dọn nhật ký tạo trùng](Back_end/db/08_OPTIONAL_cleanup_duplicate_creation_logs.sql). Script dọn là tùy chọn: xem trước CREATE đã có UPLOAD tương ứng trước khi quyết định xóa.
 
@@ -155,6 +199,8 @@ API nghiệp vụ yêu cầu Bearer access token Cognito. Các nhóm chính: /ap
 mvn -f Back_end/pom.xml test
 node --test FrontEnd/tests/*.test.cjs
 ```
+
+Mỗi lần sửa giao diện, kiểm tra cú pháp JavaScript và chạy lại bộ Node tests. Các ca hồi quy bao gồm thao tác theo trang cho ADMIN/USER, nút bỏ yêu thích, phân trang Người dùng/Nhật ký, thay đổi phiên đăng nhập và chuyển nhanh giữa các bộ sưu tập. Build JAR để xác minh đóng gói bằng `mvn -f Back_end/pom.xml package`. Đây là các kiểm tra tự động; không suy ra rằng mọi luồng dịch vụ AWS đã được kiểm thử thực tế.
 
 JUnit/Mockito/MockMvc và Node test runner kiểm tra phân quyền, chia sẻ, nhật ký, dung lượng, ghi đè, công việc và trạng thái giao diện. Test mock không thay kiểm tra thực tế MySQL/RDS, Cognito redirect, S3 CORS và điện thoại. Trước bàn giao kiểm tra ba vai trò: upload/ghi đè, các quyền chia sẻ/thu hồi, khôi phục/xóa, giao việc đúng/sai phòng ban, nộp muộn/duyệt/yêu cầu sửa, dung lượng và phạm vi nhật ký.
 

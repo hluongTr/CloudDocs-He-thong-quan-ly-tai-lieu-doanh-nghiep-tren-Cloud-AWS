@@ -70,8 +70,7 @@ public class DocumentController {
     @PostMapping
     public ResponseEntity<DocumentResponse> create(
             @Valid @RequestBody CreateDocumentRequest request, Authentication authentication) {
-        DocumentResponse created = service.create(request, authentication.getName());
-        return ResponseEntity.created(URI.create("/api/documents/" + created.id())).body(created);
+        throw new IllegalStateException("Luồng tải cũ đã ngừng. Hãy tải lại trang và dùng /api/documents/upload để gửi cả tệp");
     }
 
     @PutMapping("/{id}")
@@ -141,7 +140,7 @@ public class DocumentController {
 
     @PostMapping("/{id}/upload-url")
     public PresignedUploadResponse uploadUrl(@PathVariable Long id, Authentication authentication) {
-        return service.createUploadUrl(id, authentication.getName());
+        throw new IllegalStateException("Luồng tải trực tiếp cũ đã ngừng. Hãy tải lại trang để tải tệp an toàn");
     }
 
     @GetMapping("/{id}/download-url")

@@ -2,6 +2,12 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
+const readProjectFile = file => {
+  const stage = process.env.AUTH_TEST_STAGE;
+  if (stage && file === 'FrontEnd/js/app.js') return fs.readFileSync(require('node:path').join(stage, 'app.js'), 'utf8');
+  if (stage && file === 'FrontEnd/index.html') return fs.readFileSync(require('node:path').join(stage, 'index.html'), 'utf8');
+  return fs.readFileSync(file, 'utf8');
+};
 const {webcrypto} = require('node:crypto');
 function setup() {
   const storage = () => { const m = new Map(); return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)}; };
@@ -15,7 +21,7 @@ function setup() {
   return {...ctx,auth:window.CognitoAuth,calls:()=>calls,body:()=>body};
 }
 test('landing screen contains one login action and no local form',()=>{
-  const html=fs.readFileSync('FrontEnd/index.html','utf8').split('<div class="app-shell')[0];
+  const html=readProjectFile('FrontEnd/index.html').split('<div class="app-shell')[0];
   assert.equal((html.match(/<button/g)||[]).length,1); assert.ok(html.includes('>Đăng nhập</button>'));
   assert.ok(!/<input|<form|Đăng ký/.test(html));
   assert.ok(!/<h2>Đăng nhập<\/h2>/.test(html));
@@ -76,16 +82,16 @@ test('deployed configuration generates the expected Cognito authorization reques
   assert.ok(!url.searchParams.has('client_secret'));
 });
 function application(authOverrides = {}) {
-  const html=fs.readFileSync('FrontEnd/index.html','utf8');
+  const html=readProjectFile('FrontEnd/index.html');
   const node=()=>({style:{},dataset:{},childNodes:[],classList:{add(){this.hidden=true;},remove(){this.hidden=false;},toggle(name,hidden){this.hidden=hidden;}},reset(){},replaceChildren(){this.innerHTML="";this.textContent="";},addEventListener(){},setAttribute(){},getAttribute(){return null;}});
   const elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],node()]));
   const selectors=new Map();
   const document={getElementById:id=>elements.get(id)??null,querySelectorAll:()=>[],querySelector:selector=>{if(!selectors.has(selector))selectors.set(selector,node());return selectors.get(selector);},documentElement:node(),body:node(),addEventListener(){}};
   const auth={callback:async()=>false,token:()=>null,clear(){},login:async()=>{},...authOverrides};
   const listeners={};
-  const context={document,window:{addEventListener(name,handler){listeners[name]=handler;}},CognitoAuth:auth,localStorage:{getItem:()=>null},MutationObserver:class{observe(){}},Node:{TEXT_NODE:3,ELEMENT_NODE:1},clearInterval(){},clearTimeout(){},console};
+  const context={document,window:{addEventListener(name,handler){listeners[name]=handler;}},CognitoAuth:auth,localStorage:{getItem:()=>null},MutationObserver:class{observe(){}},Node:{TEXT_NODE:3,ELEMENT_NODE:1},clearInterval(){},setTimeout,clearTimeout,console};
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync('FrontEnd/js/app.js','utf8'),context);
+  vm.runInContext(readProjectFile('FrontEnd/js/app.js'),context);
   return {elements,auth,listeners,context};
 }
 test('returning from Cognito restores the login button instead of leaving a spinner',async()=>{
@@ -137,6 +143,58 @@ test('logout preserves backend audit call before Cognito redirect',async()=>{
   const order=[];const app=application({logout:()=>order.push('cognito')});await new Promise(setImmediate);
   app.context.fetch=async()=>{order.push('backend');return {ok:true,text:async()=>'{}'}};
   await app.elements.get('logoutButton').onclick();assert.deepEqual(order,['backend','cognito']);
+});
+
+test('session bootstrap and pageshow cannot enable sign-in while a callback is pending',async()=>{
+  let finish,logins=0;
+  const app=application({callback:()=>new Promise(resolve=>finish=resolve),login:async()=>logins++});
+  const button=app.elements.get('cognitoLogin');
+  assert.equal(button.disabled,true);assert.match(button.textContent,/kiểm tra phiên/);
+  app.listeners.pageshow();await button.onclick();assert.equal(logins,0);assert.equal(button.disabled,true);
+  finish(false);await new Promise(setImmediate);assert.equal(button.disabled,false);
+});
+
+test('sign-out clears local state immediately and blocks sign-in and duplicate logout',async()=>{
+  let token=null,finish,logins=0,logouts=0,clears=0;
+  const app=application({token:()=>token,clear:()=>{token=null;clears++;},login:async()=>logins++,logout:()=>logouts++});
+  await new Promise(setImmediate);token='old';
+  app.context.fetch=()=>new Promise(resolve=>finish=resolve);
+  const pending=app.elements.get('logoutButton').onclick();
+  assert.equal(token,null);assert.ok(clears>0);
+  assert.equal(app.elements.get('cognitoLogin').disabled,true);
+  app.listeners.pageshow();await app.elements.get('cognitoLogin').onclick();
+  await app.elements.get('logoutButton').onclick();assert.equal(logins,0);assert.equal(logouts,0);
+  finish({ok:true,text:async()=>'{}'});await pending;assert.equal(logouts,1);
+});
+
+test('unresponsive audit request cannot indefinitely block Cognito logout',async()=>{
+  let timeout,logouts=0;
+  const app=application({logout:()=>logouts++});await new Promise(setImmediate);
+  app.context.fetch=()=>new Promise(()=>{});
+  app.context.setTimeout=(fn,ms)=>{assert.equal(ms,1500);timeout=fn;return 1;};
+  const pending=app.elements.get('logoutButton').onclick();
+  timeout();await pending;assert.equal(logouts,1);
+});
+
+test('old bootstrap profile response cannot reopen the app after logout',async()=>{
+  let token='old',finishCallback,finishProfile;
+  const app=application({callback:()=>new Promise(resolve=>finishCallback=resolve),token:()=>token,clear:()=>{token=null;},logout(){}});
+  app.context.fetch=url=>url.endsWith('/me')?new Promise(resolve=>finishProfile=resolve):Promise.resolve({ok:true,text:async()=>'{}'});
+  finishCallback(false);await new Promise(setImmediate);
+  await app.elements.get('logoutButton').onclick();
+  finishProfile({ok:true,text:async()=>JSON.stringify({id:1,fullName:'Old user',role:'USER'})});
+  await new Promise(setImmediate);
+  assert.equal(app.elements.get('appShell').classList.hidden,true);
+  assert.equal(app.elements.get('sidebarUserName').textContent,'—');
+});
+
+test('browser Back restoration rechecks the session before enabling sign-in',async()=>{
+  const app=application();await new Promise(setImmediate);
+  let finish;
+  app.auth.callback=()=>new Promise(resolve=>finish=resolve);
+  app.listeners.pageshow({persisted:true});
+  assert.equal(app.elements.get('cognitoLogin').disabled,true);
+  finish(false);await new Promise(setImmediate);assert.equal(app.elements.get('cognitoLogin').disabled,false);
 });
 test('missing display name can be entered and saved without email; all name locations update',async()=>{
   const app=application();await new Promise(setImmediate);const c=app.context;

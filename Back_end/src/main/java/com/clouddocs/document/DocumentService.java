@@ -78,7 +78,7 @@ public class DocumentService {
                                 unique.putIfAbsent(document.getId(), document);
                             }
                         });
-        return toResponses(unique.values().stream().limit(50).toList(), user);
+        return toResponses(unique.values().stream().toList(), user);
     }
 
     @Transactional(readOnly = true)
@@ -142,7 +142,8 @@ public class DocumentService {
         d.setFileSize(request.fileSize());
         d.setOwner(user.getUsername());
         d.setOwnerId(user.getId());
-        d.setDepartment(departments.documentName(request.department(),d.getDepartment()));
+        d.setDepartment(com.clouddocs.auth.DepartmentScope.assigned(user)
+                ? user.getDepartment().trim() : com.clouddocs.department.DepartmentService.UNASSIGNED);
         d.setStatus("ACTIVE");
 
         d.setS3Key("documents/" + java.util.UUID.randomUUID());
@@ -522,7 +523,7 @@ public class DocumentService {
                 d.getDepartment(),
                 d.getStatus(),
                 d.getUpdatedAt().toString(),
-                permissionService.effectiveAccess(d, user),permissionService.inLibrary(d,user));
+                permissionService.effectiveAccess(d, user),permissionService.inLibrary(d,user),d.getFolderId(),java.util.Objects.equals(d.getOwnerId(),user.getId()));
     }
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)

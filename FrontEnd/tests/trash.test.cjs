@@ -2,11 +2,12 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'); const vm=require('node:vm');
 const source=fs.readFileSync('FrontEnd/js/app.js','utf8');
+test('trash select-all only selects current page and drops off-page selections',()=>{const s=screen();s.ctx.trashDocuments=Array.from({length:45},(_,i)=>({id:i+1,name:'file'+i}));const visible=s.ctx.trashDocuments.slice(20,40);s.ctx.window.listPageItems=()=>visible;s.ctx.window.pageList=()=>visible;s.ctx.selectAllTrash(true);assert.equal(s.ctx.selectedTrashIds.size,20);assert.equal(s.ctx.selectedTrashIds.has(1),false);assert.equal(s.ctx.selectedTrashIds.has(21),true);});
 function screen() {
   const nodes=new Map(); const checks=[];
   const document={getElementById(id){if(!nodes.has(id))nodes.set(id,{textContent:'',innerHTML:'',classList:{toggle(){}},disabled:false});return nodes.get(id);},querySelectorAll(){return checks;}};
   const calls=[],toasts=[];
-  const ctx=vm.createContext({window:{},document,selectedDocumentIds:new Set(),selectedTrashIds:new Set(),trashDocuments:[],bulkShareIds:[],bulkBusy:false,docs:[],currentUser:{role:'ADMIN'},currentSettings:{badge:true},notifications:[],localStorage:{getItem(){return '0';}},confirm:()=>true,getToken:()=> 'token',normalize:d=>d,escapeHtml:v=>String(v??'').replaceAll('<','&lt;').replaceAll('>','&gt;'),formatUpdated:v=>v,notificationSeenKey:()=> 'seen',showToast:m=>toasts.push(m),api:async(path,options)=>{calls.push({path,options});return [];},filterDocs(){},loadDocuments:async()=>{},loadNotifications:async()=>{},downloadDocument:async()=>true,loadShareModal:async(id,ids)=>{calls.push({id,ids});}});
+  const ctx=vm.createContext({window:{},document,activePage:"documents",selectedDocumentIds:new Set(),selectedTrashIds:new Set(),trashDocuments:[],bulkShareIds:[],bulkBusy:false,docs:[],currentUser:{role:'ADMIN'},currentSettings:{badge:true},notifications:[],localStorage:{getItem(){return '0';}},confirm:()=>true,getToken:()=> 'token',normalize:d=>d,escapeHtml:v=>String(v??'').replaceAll('<','&lt;').replaceAll('>','&gt;'),formatUpdated:v=>v,notificationSeenKey:()=> 'seen',showToast:m=>toasts.push(m),api:async(path,options)=>{calls.push({path,options});return [];},filterDocs(){},loadDocuments:async()=>{},loadNotifications:async()=>{},downloadDocument:async()=>true,loadShareModal:async(id,ids)=>{calls.push({id,ids});}});
   vm.runInContext(source.slice(source.indexOf('// Selection is scoped')),ctx);
   Object.assign(ctx,ctx.window);
   const start=source.indexOf('function renderNotifications()');
